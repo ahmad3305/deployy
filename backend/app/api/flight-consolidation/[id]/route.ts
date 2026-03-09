@@ -39,10 +39,10 @@ export async function GET(
         (SELECT COUNT(*) FROM Tickets t 
          WHERE t.flight_schedule_id = fc.original_flight_schedule_id) as affected_passengers
       FROM Flight_consolidation fc
-      LEFT JOIN Flight_Schedule orig_fs ON fc.original_flight_schedule_id = orig_fs.flight_schedule_id
+      LEFT JOIN Flight_schedules orig_fs ON fc.original_flight_schedule_id = orig_fs.flight_schedule_id
       LEFT JOIN Flights orig_f ON orig_fs.flight_id = orig_f.flight_id
       LEFT JOIN Airline orig_al ON orig_f.airline_id = orig_al.airline_id
-      LEFT JOIN Flight_Schedule new_fs ON fc.new_flight_schedule_id = new_fs.flight_schedule_id
+      LEFT JOIN Flight_schedules new_fs ON fc.new_flight_schedule_id = new_fs.flight_schedule_id
       LEFT JOIN Flights new_f ON new_fs.flight_id = new_f.flight_id
       LEFT JOIN Airline new_al ON new_f.airline_id = new_al.airline_id
       LEFT JOIN Airport src ON orig_f.source_airport_id = src.airport_id
@@ -125,9 +125,9 @@ export async function PUT(
         orig_f.flight_number as original_flight_number,
         new_f.flight_number as new_flight_number
       FROM Flight_consolidation fc
-      LEFT JOIN Flight_Schedule orig_fs ON fc.original_flight_schedule_id = orig_fs.flight_schedule_id
+      LEFT JOIN Flight_schedules orig_fs ON fc.original_flight_schedule_id = orig_fs.flight_schedule_id
       LEFT JOIN Flights orig_f ON orig_fs.flight_id = orig_f.flight_id
-      LEFT JOIN Flight_Schedule new_fs ON fc.new_flight_schedule_id = new_fs.flight_schedule_id
+      LEFT JOIN Flight_schedules new_fs ON fc.new_flight_schedule_id = new_fs.flight_schedule_id
       LEFT JOIN Flights new_f ON new_fs.flight_id = new_f.flight_id
       WHERE fc.consolidation_id = ?`,
       [consolidationId]

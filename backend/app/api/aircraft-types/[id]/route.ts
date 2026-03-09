@@ -16,7 +16,7 @@ export async function GET(
     }
 
     const aircraftType = await queryOne(
-      'SELECT * FROM Aircraft_Type WHERE aircraft_type_id = ?',
+      'SELECT * FROM Aircraft_types WHERE aircraft_type_id = ?',
       [aircraftTypeId]
     );
 
@@ -45,7 +45,7 @@ export async function PUT(
 
     // Check if aircraft type exists
     const existing = await queryOne(
-      'SELECT * FROM Aircraft_Type WHERE aircraft_type_id = ?',
+      'SELECT * FROM Aircraft_types WHERE aircraft_type_id = ?',
       [aircraftTypeId]
     );
 
@@ -70,7 +70,7 @@ export async function PUT(
 
       if (newModelName !== (existing as any).model_name || newManufacturer !== (existing as any).manufacturer) {
         const duplicateExists = await queryOne(
-          'SELECT aircraft_type_id FROM Aircraft_Type WHERE model_name = ? AND manufacturer = ? AND aircraft_type_id != ?',
+          'SELECT aircraft_type_id FROM Aircraft_types WHERE model_name = ? AND manufacturer = ? AND aircraft_type_id != ?',
           [newModelName, newManufacturer, aircraftTypeId]
         );
 
@@ -104,13 +104,13 @@ export async function PUT(
     values.push(aircraftTypeId);
 
     await query(
-      `UPDATE Aircraft_Type SET ${updates.join(', ')} WHERE aircraft_type_id = ?`,
+      `UPDATE Aircraft_types SET ${updates.join(', ')} WHERE aircraft_type_id = ?`,
       values
     );
 
     // Fetch updated aircraft type
     const updatedAircraftType = await queryOne(
-      'SELECT * FROM Aircraft_Type WHERE aircraft_type_id = ?',
+      'SELECT * FROM Aircraft_types WHERE aircraft_type_id = ?',
       [aircraftTypeId]
     );
 
@@ -135,7 +135,7 @@ export async function DELETE(
 
     // Check if aircraft type exists
     const existing = await queryOne(
-      'SELECT * FROM Aircraft_Type WHERE aircraft_type_id = ?',
+      'SELECT * FROM Aircraft_types WHERE aircraft_type_id = ?',
       [aircraftTypeId]
     );
 
@@ -154,7 +154,7 @@ export async function DELETE(
     }
 
     // Delete aircraft type
-    await query('DELETE FROM Aircraft_Type WHERE aircraft_type_id = ?', [aircraftTypeId]);
+    await query('DELETE FROM Aircraft_types WHERE aircraft_type_id = ?', [aircraftTypeId]);
 
     return noContentResponse();
   } catch (error: any) {

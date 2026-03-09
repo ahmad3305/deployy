@@ -29,7 +29,7 @@ export async function GET(
         ap.city as current_airport_city
       FROM Aircraft a
       LEFT JOIN Airline al ON a.airline_id = al.airline_id
-      LEFT JOIN Aircraft_Type at ON a.aircraft_type_id = at.aircraft_type_id
+      LEFT JOIN Aircraft_types at ON a.aircraft_type_id = at.aircraft_type_id
       LEFT JOIN Airport ap ON a.current_airport = ap.airport_id
       WHERE a.aircraft_id = ?`,
       [aircraftId]
@@ -105,7 +105,7 @@ export async function PUT(
     // Verify aircraft type exists if being updated
     if (updateData.aircraft_type_id) {
       const aircraftType = await queryOne(
-        'SELECT aircraft_type_id FROM Aircraft_Type WHERE aircraft_type_id = ?',
+        'SELECT aircraft_type_id FROM Aircraft_types WHERE aircraft_type_id = ?',
         [updateData.aircraft_type_id]
       );
 
@@ -204,7 +204,7 @@ export async function PUT(
         ap.airport_name as current_airport_name
       FROM Aircraft a
       LEFT JOIN Airline al ON a.airline_id = al.airline_id
-      LEFT JOIN Aircraft_Type at ON a.aircraft_type_id = at.aircraft_type_id
+      LEFT JOIN Aircraft_types at ON a.aircraft_type_id = at.aircraft_type_id
       LEFT JOIN Airport ap ON a.current_airport = ap.airport_id
       WHERE a.aircraft_id = ?`,
       [aircraftId]

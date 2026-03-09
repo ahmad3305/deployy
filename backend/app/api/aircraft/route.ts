@@ -1,166 +1,78 @@
 import { NextRequest } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
-import { aircraftCreateSchema, validateData } from '@/lib/validations';
+import { aircraftTypeCreateSchema, aircraftTypeUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/aircraft - Get all aircraft ==========
+// ========== GET /api/aircraft-types - Get all aircraft types ==========
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const airline_id = searchParams.get('airline_id');
-    const status = searchParams.get('status');
-    const current_airport = searchParams.get('current_airport');
-    const aircraft_type_id = searchParams.get('aircraft_type_id');
+    const manufacturer = searchParams.get('manufacturer');
+    const model_name = searchParams.get('model_name');
 
-    let sql = `
-      SELECT 
-        a.*,
-        al.airline_name,
-        al.airline_code,
-        at.model_name,
-        at.manufacturer,
-        ap.airport_name as current_airport_name,
-        ap.airport_code as current_airport_code
-      FROM Aircraft a
-      LEFT JOIN Airline al ON a.airline_id = al.airline_id
-      LEFT JOIN Aircraft_Type at ON a.aircraft_type_id = at.aircraft_type_id
-      LEFT JOIN Airport ap ON a.current_airport = ap.airport_id
-      WHERE 1=1
-    `;
+    let sql = 'SELECT * FROM Aircraft_types WHERE 1=1';
     const params: any[] = [];
 
-    // Filter by airline
-    if (airline_id) {
-      sql += ' AND a.airline_id = ?';
-      params.push(parseInt(airline_id));
+    // Filter by manufacturer
+    if (manufacturer) {
+      sql += ' AND manufacturer = ?';
+      params.push(manufacturer);
     }
 
-    // Filter by status
-    if (status) {
-      sql += ' AND a.status = ?';
-      params.push(status);
+    // Filter by model name
+    if (model_name) {
+      sql += ' AND model_name LIKE ?';
+      params.push(`%${model_name}%`);
     }
 
-    // Filter by current airport
-    if (current_airport) {
-      sql += ' AND a.current_airport = ?';
-      params.push(parseInt(current_airport));
-    }
+    sql += ' ORDER BY manufacturer ASC, model_name ASC';
 
-    // Filter by aircraft type
-    if (aircraft_type_id) {
-      sql += ' AND a.aircraft_type_id = ?';
-      params.push(parseInt(aircraft_type_id));
-    }
+    const aircraftTypes = await query(sql, params);
 
-    sql += ' ORDER BY a.registration_number ASC';
-
-    const aircraft = await query(sql, params);
-
-    return successResponse(aircraft, 'Aircraft retrieved successfully');
+    return successResponse(aircraftTypes, 'Aircraft types retrieved successfully');
   } catch (error: any) {
-    console.error('Get aircraft error:', error);
-    return errorResponse('Failed to retrieve aircraft: ' + error.message, 500);
+    console.error('Get aircraft types error:', error);
+    return errorResponse('Failed to retrieve aircraft types: ' + error.message, 500);
   }
 }
 
-// ========== POST /api/aircraft - Create new aircraft ==========
+// ========== POST /api/aircraft-types - Create new aircraft type ==========
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
     // Validate input
-    const validation = validateData(aircraftCreateSchema, body);
+    const validation = validateData(aircraftTypeCreateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
     }
 
-    const data = validation.data!;
+    const { model_name, manufacturer, seat_capacity } = validation.data!;
 
-    // Check if registration number already exists
+    // Check if aircraft type already exists (same model and manufacturer)
     const existing = await queryOne(
-      'SELECT aircraft_id FROM Aircraft WHERE registration_number = ?',
-      [data.registration_number]
+      'SELECT aircraft_type_id FROM Aircraft_types WHERE model_name = ? AND manufacturer = ?',
+      [model_name, manufacturer]
     );
 
     if (existing) {
-      return errorResponse('Registration number already exists', 409);
+      return errorResponse('Aircraft type with this model name and manufacturer already exists', 409);
     }
 
-    // Verify airline exists
-    const airline = await queryOne(
-      'SELECT airline_id FROM Airline WHERE airline_id = ?',
-      [data.airline_id]
-    );
-
-    if (!airline) {
-      return errorResponse('Airline not found', 404);
-    }
-
-    // Verify aircraft type exists
-    const aircraftType = await queryOne(
-      'SELECT aircraft_type_id FROM Aircraft_Type WHERE aircraft_type_id = ?',
-      [data.aircraft_type_id]
-    );
-
-    if (!aircraftType) {
-      return errorResponse('Aircraft type not found', 404);
-    }
-
-    // Verify current airport exists
-    const airport = await queryOne(
-      'SELECT airport_id FROM Airport WHERE airport_id = ?',
-      [data.current_airport]
-    );
-
-    if (!airport) {
-      return errorResponse('Airport not found', 404);
-    }
-
-    // Insert aircraft
+    // Insert aircraft type
     const result = await query<any>(
-      `INSERT INTO Aircraft (
-        airline_id, aircraft_type_id, registration_number, status,
-        economy_seats, business_seats, first_class_seats,
-        max_speed_kmh, fuel_capacity_litres, manufactered_date,
-        latest_maintenance, next_maintenance_due, current_airport
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        data.airline_id,
-        data.aircraft_type_id,
-        data.registration_number,
-        data.status,
-        data.economy_seats,
-        data.business_seats,
-        data.first_class_seats,
-        data.max_speed_kmh,
-        data.fuel_capacity_litres,
-        data.manufactered_date,
-        data.latest_maintenance || null,
-        data.next_maintenance_due || null,
-        data.current_airport
-      ]
+      'INSERT INTO Aircraft_types (model_name, manufacturer, seat_capacity) VALUES (?, ?, ?)',
+      [model_name, manufacturer, seat_capacity]
     );
 
-    // Fetch created aircraft with joined data
-    const newAircraft = await queryOne(
-      `SELECT 
-        a.*,
-        al.airline_name,
-        at.model_name,
-        at.manufacturer,
-        ap.airport_name as current_airport_name
-      FROM Aircraft a
-      LEFT JOIN Airline al ON a.airline_id = al.airline_id
-      LEFT JOIN Aircraft_Type at ON a.aircraft_type_id = at.aircraft_type_id
-      LEFT JOIN Airport ap ON a.current_airport = ap.airport_id
-      WHERE a.aircraft_id = ?`,
+    const newAircraftType = await queryOne(
+      'SELECT * FROM Aircraft_types WHERE aircraft_type_id = ?',
       [result.insertId]
     );
 
-    return createdResponse(newAircraft, 'Aircraft created successfully');
+    return createdResponse(newAircraftType, 'Aircraft type created successfully');
   } catch (error: any) {
-    console.error('Create aircraft error:', error);
-    return errorResponse('Failed to create aircraft: ' + error.message, 500);
+    console.error('Create aircraft type error:', error);
+    return errorResponse('Failed to create aircraft type: ' + error.message, 500);
   }
 }

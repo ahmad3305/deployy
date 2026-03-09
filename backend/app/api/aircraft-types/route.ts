@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const manufacturer = searchParams.get('manufacturer');
     const model_name = searchParams.get('model_name');
 
-    let sql = 'SELECT * FROM Aircraft_Type WHERE 1=1';
+    let sql = 'SELECT * FROM Aircraft_types WHERE 1=1';
     const params: any[] = [];
 
     // Filter by manufacturer
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 
     // Check if aircraft type already exists (same model and manufacturer)
     const existing = await queryOne(
-      'SELECT aircraft_type_id FROM Aircraft_Type WHERE model_name = ? AND manufacturer = ?',
+      'SELECT aircraft_type_id FROM Aircraft_types WHERE model_name = ? AND manufacturer = ?',
       [model_name, manufacturer]
     );
 
@@ -61,12 +61,12 @@ export async function POST(request: NextRequest) {
 
     // Insert aircraft type
     const result = await query<any>(
-      'INSERT INTO Aircraft_Type (model_name, manufacturer, seat_capacity) VALUES (?, ?, ?)',
+      'INSERT INTO Aircraft_types (model_name, manufacturer, seat_capacity) VALUES (?, ?, ?)',
       [model_name, manufacturer, seat_capacity]
     );
 
     const newAircraftType = await queryOne(
-      'SELECT * FROM Aircraft_Type WHERE aircraft_type_id = ?',
+      'SELECT * FROM Aircraft_types WHERE aircraft_type_id = ?',
       [result.insertId]
     );
 

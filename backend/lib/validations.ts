@@ -154,16 +154,6 @@ export const taskCreateSchema = z.object({
 
 export const taskUpdateSchema = taskCreateSchema.partial();
 
-// ========== Flight Incident Validations ==========
-export const flightIncidentCreateSchema = z.object({
-  flight_schedule_id: z.number().int().positive(),
-  incident_type: z.enum(['Technical Issue', 'Weather Delay', 'Crew Issue', 'Security Issue', 'Emergency']),
-  description: z.string().optional().nullable(),
-  resolved_at: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/).optional().nullable(),
-  flight_status: z.enum(['Open', 'Resolved']).default('Open'),
-});
-
-export const flightIncidentUpdateSchema = flightIncidentCreateSchema.partial();
 
 // ========== Helper function to validate data ==========
 export function validateData<T>(
@@ -186,3 +176,118 @@ export function validateData<T>(
     return { success: false, errors: [{ message: 'Validation failed' }] };
   }
 }
+
+// Terminal validation schemas
+export const terminalCreateSchema = z.object({
+  airport_id: z.number().int().positive(),
+  terminal_name: z.string().min(1).max(50),
+  terminal_code: z.string().min(1).max(10),
+});
+
+export const terminalUpdateSchema = z.object({
+  terminal_name: z.string().min(1).max(50).optional(),
+  terminal_code: z.string().min(1).max(10).optional(),
+});
+
+// Gate validation schemas
+export const gateCreateSchema = z.object({
+  terminal_id: z.number().int().positive(),
+  gate_number: z.string().min(1).max(10),
+  status: z.enum(['Available', 'Occupied', 'Maintenance']).optional(),
+});
+
+export const gateUpdateSchema = z.object({
+  gate_number: z.string().min(1).max(10).optional(),
+  status: z.enum(['Available', 'Occupied', 'Maintenance']).optional(),
+});
+
+// Runway validation schemas
+export const runwayCreateSchema = z.object({
+  airport_id: z.number().int().positive(),
+  runway_number: z.string().min(1).max(10),
+  length_meters: z.number().positive(),
+  width_meters: z.number().positive(),
+  surface_type: z.string().min(1).max(50),
+  status: z.enum(['Available', 'Closed', 'Maintenance']).optional(),
+});
+
+export const runwayUpdateSchema = z.object({
+  runway_number: z.string().min(1).max(10).optional(),
+  length_meters: z.number().positive().optional(),
+  width_meters: z.number().positive().optional(),
+  surface_type: z.string().min(1).max(50).optional(),
+  status: z.enum(['Available', 'Closed', 'Maintenance']).optional(),
+});
+
+// Baggage validation schemas
+export const baggageCreateSchema = z.object({
+  ticket_id: z.number().int().positive(),
+  flight_schedule_id: z.number().int().positive(),
+  weight_kg: z.number().positive(),
+  baggage_type: z.enum(['Checked', 'Carry-On', 'Special']),
+  tag_number: z.string().min(1).max(20),
+  status: z.enum(['Checked-In', 'Loaded', 'In Transit', 'Arrived', 'Claimed', 'Lost']).optional(),
+});
+
+export const baggageUpdateSchema = z.object({
+  weight_kg: z.number().positive().optional(),
+  baggage_type: z.enum(['Checked', 'Carry-On', 'Special']).optional(),
+  tag_number: z.string().min(1).max(20).optional(),
+  status: z.enum(['Checked-In', 'Loaded', 'In Transit', 'Arrived', 'Claimed', 'Lost']).optional(),
+});
+
+// Boarding Record validation schemas
+export const boardingRecordCreateSchema = z.object({
+  ticket_id: z.number().int().positive(),
+  gate_id: z.number().int().positive(),
+  boarding_time: z.string().datetime(),
+  boarding_status: z.enum(['Pending', 'Boarded', 'Denied']).optional(),
+});
+
+export const boardingRecordUpdateSchema = z.object({
+  gate_id: z.number().int().positive().optional(),
+  boarding_time: z.string().datetime().optional(),
+  boarding_status: z.enum(['Pending', 'Boarded', 'Denied']).optional(),
+});
+
+// Crew Requirements validation schemas
+export const crewRequirementCreateSchema = z.object({
+  flight_schedule_id: z.number().int().positive(),
+  role_required: z.string().min(1).max(100),
+  number_required: z.number().int().positive(),
+});
+
+export const crewRequirementUpdateSchema = z.object({
+  role_required: z.string().min(1).max(100).optional(),
+  number_required: z.number().int().positive().optional(),
+});
+
+// Flight Consolidation validation schemas
+export const flightConsolidationCreateSchema = z.object({
+  original_flight_schedule_id: z.number().int().positive(),
+  new_flight_schedule_id: z.number().int().positive(),
+  reason: z.string().min(1).max(200),
+  consolidation_date: z.string().datetime(),
+});
+
+export const flightConsolidationUpdateSchema = z.object({
+  reason: z.string().min(1).max(200).optional(),
+  consolidation_date: z.string().datetime().optional(),
+});
+
+// Flight Incidents validation schemas
+export const flightIncidentCreateSchema = z.object({
+  flight_schedule_id: z.number().int().positive(),
+  incident_type: z.enum(['Technical Issue', 'Weather Delay', 'Crew Issue', 'Security Issue', 'Emergency']),
+  description: z.string().optional(),
+  reported_at: z.string().datetime().optional(),
+  resolved_at: z.string().datetime().optional(),
+  flight_status: z.enum(['Open', 'Resolved']).optional(),
+});
+
+export const flightIncidentUpdateSchema = z.object({
+  incident_type: z.enum(['Technical Issue', 'Weather Delay', 'Crew Issue', 'Security Issue', 'Emergency']).optional(),
+  description: z.string().optional(),
+  resolved_at: z.string().datetime().optional(),
+  flight_status: z.enum(['Open', 'Resolved']).optional(),
+});

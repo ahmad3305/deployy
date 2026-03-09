@@ -1,32 +1,236 @@
-import { NextResponse } from "next/server";
-import pool from "@/lib/db";
+import { NextRequest } from 'next/server';
+import { query, queryOne } from '@/lib/db';
+import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
+import { flightScheduleCreateSchema, validateData } from '@/lib/validations';
 
-export async function GET() {
+// ========== GET /api/flight-schedules - Get all flight schedules ==========
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const flight_id = searchParams.get('flight_id');
+    const aircraft_id = searchParams.get('aircraft_id');
+    const flight_status = searchParams.get('flight_status');
+    const departure_date = searchParams.get('departure_date');
+    const source_airport_id = searchParams.get('source_airport_id');
+    const destination_airport_id = searchParams.get('destination_airport_id');
 
-    const [rows] = await pool.query(`
+    let sql = `
       SELECT 
-        fs.schedule_id,
+        fs.*,
         f.flight_number,
-        fs.departure_time,
-        fs.arrival_time,
-        fs.status
-      FROM Flight_Schedules fs
-      JOIN Flights f
-      ON fs.flight_id = f.flight_id
-    `);
+        f.flight_type,
+        f.estimated_duration,
+        al.airline_name,
+        al.airline_code,
+        ac.registration_number,
+        at.model_name,
+        at.manufacturer,
+        src.airport_name as source_airport_name,
+        src.airport_code as source_airport_code,
+        src.city as source_city,
+        dest.airport_name as destination_airport_name,
+        dest.airport_code as destination_airport_code,
+        dest.city as destination_city,
+        g.gate_number,
+        t.terminal_name
+      FROM Flight_schedules fs
+      LEFT JOIN Flights f ON fs.flight_id = f.flight_id
+      LEFT JOIN Airline al ON f.airline_id = al.airline_id
+      LEFT JOIN Aircraft ac ON fs.aircraft_id = ac.aircraft_id
+      LEFT JOIN Aircraft_types at ON ac.aircraft_type_id = at.aircraft_type_id
+      LEFT JOIN Airport src ON f.source_airport_id = src.airport_id
+      LEFT JOIN Airport dest ON f.destination_airport_id = dest.airport_id
+      LEFT JOIN Gates g ON fs.gate_id = g.gate_id
+      LEFT JOIN Terminals t ON g.terminal_id = t.terminal_id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
 
-    return NextResponse.json({
-      success: true,
-      data: rows
-    });
+    // Filter by flight
+    if (flight_id) {
+      sql += ' AND fs.flight_id = ?';
+      params.push(parseInt(flight_id));
+    }
 
-  } catch (error) {
-    console.error(error);
+    // Filter by aircraft
+    if (aircraft_id) {
+      sql += ' AND fs.aircraft_id = ?';
+      params.push(parseInt(aircraft_id));
+    }
 
-    return NextResponse.json(
-      { success: false, message: String(error) },
-      { status: 500 }
+    // Filter by flight status
+    if (flight_status) {
+      sql += ' AND fs.flight_status = ?';
+      params.push(flight_status);
+    }
+
+    // Filter by departure date
+    if (departure_date) {
+      sql += ' AND DATE(fs.departure_datetime) = ?';
+      params.push(departure_date);
+    }
+
+    // Filter by source airport
+    if (source_airport_id) {
+      sql += ' AND f.source_airport_id = ?';
+      params.push(parseInt(source_airport_id));
+    }
+
+    // Filter by destination airport
+    if (destination_airport_id) {
+      sql += ' AND f.destination_airport_id = ?';
+      params.push(parseInt(destination_airport_id));
+    }
+
+    sql += ' ORDER BY fs.departure_datetime DESC';
+
+    const schedules = await query(sql, params);
+
+    return successResponse(schedules, 'Flight schedules retrieved successfully');
+  } catch (error: any) {
+    console.error('Get flight schedules error:', error);
+    return errorResponse('Failed to retrieve flight schedules: ' + error.message, 500);
+  }
+}
+
+// ========== POST /api/flight-schedules - Create new flight schedule ==========
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    // Validate input
+    const validation = validateData(flightScheduleCreateSchema, body);
+    if (!validation.success) {
+      return validationErrorResponse(validation.errors);
+    }
+
+    const data = validation.data!;
+
+    // Verify flight exists
+    const flight = await queryOne(
+      'SELECT * FROM Flights WHERE flight_id = ?',
+      [data.flight_id]
     );
+
+    if (!flight) {
+      return errorResponse('Flight not found', 404);
+    }
+
+    // Verify aircraft exists and is active
+    const aircraft = await queryOne<any>(
+      'SELECT * FROM Aircraft WHERE aircraft_id = ?',
+      [data.aircraft_id]
+    );
+
+    if (!aircraft) {
+      return errorResponse('Aircraft not found', 404);
+    }
+
+    if (aircraft.status !== 'Active') {
+      return errorResponse('Aircraft is not active', 400);
+    }
+
+    // Verify gate exists
+    const gate = await queryOne(
+      'SELECT * FROM Gates WHERE gate_id = ?',
+      [data.gate_id]
+    );
+
+    if (!gate) {
+      return errorResponse('Gate not found', 404);
+    }
+
+    // Check if arrival is after departure
+    const departureTime = new Date(data.departure_datetime);
+    const arrivalTime = new Date(data.arrival_datetime);
+
+    if (arrivalTime <= departureTime) {
+      return errorResponse('Arrival time must be after departure time', 400);
+    }
+
+    // Check if aircraft is available (not scheduled for another flight at the same time)
+    const aircraftConflict = await queryOne(
+      `SELECT flight_schedule_id FROM Flight_schedules 
+       WHERE aircraft_id = ? 
+       AND flight_status NOT IN ('Cancelled', 'Completed')
+       AND (
+         (departure_datetime <= ? AND arrival_datetime >= ?) OR
+         (departure_datetime <= ? AND arrival_datetime >= ?) OR
+         (departure_datetime >= ? AND arrival_datetime <= ?)
+       )`,
+      [
+        data.aircraft_id,
+        data.departure_datetime, data.departure_datetime,
+        data.arrival_datetime, data.arrival_datetime,
+        data.departure_datetime, data.arrival_datetime
+      ]
+    );
+
+    if (aircraftConflict) {
+      return errorResponse('Aircraft is already scheduled for another flight at this time', 409);
+    }
+
+    // Check if gate is available
+    const gateConflict = await queryOne(
+      `SELECT flight_schedule_id FROM Flight_schedules 
+       WHERE gate_id = ? 
+       AND flight_status NOT IN ('Cancelled', 'Completed')
+       AND (
+         (departure_datetime <= ? AND arrival_datetime >= ?) OR
+         (departure_datetime <= ? AND arrival_datetime >= ?) OR
+         (departure_datetime >= ? AND arrival_datetime <= ?)
+       )`,
+      [
+        data.gate_id,
+        data.departure_datetime, data.departure_datetime,
+        data.arrival_datetime, data.arrival_datetime,
+        data.departure_datetime, data.arrival_datetime
+      ]
+    );
+
+    if (gateConflict) {
+      return errorResponse('Gate is already assigned to another flight at this time', 409);
+    }
+
+    // Insert flight schedule
+    const result = await query<any>(
+      `INSERT INTO Flight_schedules (
+        flight_id, aircraft_id, departure_datetime, 
+        arrival_datetime, gate_id, flight_status
+      ) VALUES (?, ?, ?, ?, ?, 'Scheduled')`,
+      [
+        data.flight_id,
+        data.aircraft_id,
+        data.departure_datetime,
+        data.arrival_datetime,
+        data.gate_id
+      ]
+    );
+
+    // Fetch created schedule with joined data
+    const newSchedule = await queryOne(
+      `SELECT 
+        fs.*,
+        f.flight_number,
+        al.airline_name,
+        ac.registration_number,
+        src.airport_name as source_airport_name,
+        dest.airport_name as destination_airport_name,
+        g.gate_number
+      FROM Flight_schedules fs
+      LEFT JOIN Flights f ON fs.flight_id = f.flight_id
+      LEFT JOIN Airline al ON f.airline_id = al.airline_id
+      LEFT JOIN Aircraft ac ON fs.aircraft_id = ac.aircraft_id
+      LEFT JOIN Airport src ON f.source_airport_id = src.airport_id
+      LEFT JOIN Airport dest ON f.destination_airport_id = dest.airport_id
+      LEFT JOIN Gates g ON fs.gate_id = g.gate_id
+      WHERE fs.flight_schedule_id = ?`,
+      [result.insertId]
+    );
+
+    return createdResponse(newSchedule, 'Flight schedule created successfully');
+  } catch (error: any) {
+    console.error('Create flight schedule error:', error);
+    return errorResponse('Failed to create flight schedule: ' + error.message, 500);
   }
 }
