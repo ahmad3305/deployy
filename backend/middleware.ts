@@ -26,6 +26,7 @@ export function middleware(request: NextRequest) {
     '/api/runways',
   ];
 
+
   const isPublicGet = publicGetRoutes.some(route => pathname.startsWith(route)) 
                       && request.method === 'GET';
   
