@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import { verifyToken } from '@/lib/auth';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { airportCreateSchema, airportUpdateSchema, validateData } from '@/lib/validations';
 
@@ -45,6 +46,14 @@ export async function GET(request: NextRequest) {
 
 // ========== POST /api/airports - Create new airport ==========
 export async function POST(request: NextRequest) {
+
+  const token = request.headers.get('authorization')?.substring(7);
+  const user = verifyToken(token!);
+  
+  if (!user || user.role !== 'Admin') {
+    return errorResponse('Admin access required', 403);
+  }
+
   try {
     const body = await request.json();
 
@@ -83,3 +92,5 @@ export async function POST(request: NextRequest) {
     return errorResponse('Failed to create airport: ' + error.message, 500);
   }
 }
+
+

@@ -1,24 +1,25 @@
 import { z } from 'zod';
 
-// ========== Airport Validations ==========
+// Airport validation schemas
 export const airportCreateSchema = z.object({
-  airport_name: z.string().min(1).max(100),
+  airport_name: z.string().min(1).max(255),
+  airport_code: z.string().length(3).or(z.string().length(4)), // IATA or ICAO
   city: z.string().min(1).max(100),
   country: z.string().min(1).max(100),
-  airport_code: z.string().min(1).max(10),
-  timezone: z.string().min(1).max(50),
+  timezone: z.string().min(1).max(100),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
 
-export const airportUpdateSchema = airportCreateSchema.partial();
-
-// ========== Airline Validations ==========
-export const airlineCreateSchema = z.object({
-  airline_name: z.string().min(1).max(100),
-  country: z.string().min(1).max(100),
-  airline_code: z.string().min(1).max(10),
+export const airportUpdateSchema = z.object({
+  airport_name: z.string().min(1).max(255).optional(),
+  airport_code: z.string().length(3).or(z.string().length(4)).optional(),
+  city: z.string().min(1).max(100).optional(),
+  country: z.string().min(1).max(100).optional(),
+  timezone: z.string().min(1).max(100).optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
-
-export const airlineUpdateSchema = airlineCreateSchema.partial();
 
 // ========== Aircraft Type Validations ==========
 export const aircraftTypeCreateSchema = z.object({
@@ -129,30 +130,6 @@ export const paymentCreateSchema = z.object({
 export const paymentUpdateSchema = paymentCreateSchema.partial();
 
 // ========== Staff Validations ==========
-export const staffCreateSchema = z.object({
-  airport_id: z.number().int().positive(),
-  first_name: z.string().min(1).max(50),
-  last_name: z.string().min(1).max(50),
-  role: z.enum(['Pilot', 'Co-Pilot', 'Cabin Crew', 'Check-in Staff', 'Boarding Staff', 'Baggage Handler', 'Ramp Operator', 'Maintenance Crew', 'Supervisor']),
-  staff_type: z.enum(['Flight Crew', 'Ground Staff']),
-  hire_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  license_number: z.string().max(100).optional().nullable(),
-  status: z.enum(['Active', 'On Leave', 'Inactive']).default('Active'),
-});
-
-export const staffUpdateSchema = staffCreateSchema.partial();
-
-// ========== Task Validations ==========
-export const taskCreateSchema = z.object({
-  flight_schedule_id: z.number().int().positive(),
-  task_type: z.enum(['Pilot Operation', 'Cabin Preparation', 'Boarding', 'Baggage Loading', 'Baggage Unloading', 'Aircraft Cleaning', 'Technical Check']),
-  required_role: z.string().min(1).max(100),
-  start_time: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
-  end_time: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
-  task_status: z.enum(['Pending', 'Assigned', 'In Progress', 'Completed']).default('Pending'),
-});
-
-export const taskUpdateSchema = taskCreateSchema.partial();
 
 
 // ========== Helper function to validate data ==========
@@ -290,4 +267,74 @@ export const flightIncidentUpdateSchema = z.object({
   description: z.string().optional(),
   resolved_at: z.string().datetime().optional(),
   flight_status: z.enum(['Open', 'Resolved']).optional(),
+});
+
+
+
+// Staff validation schemas
+export const staffCreateSchema = z.object({
+  airport_id: z.number().int().positive(),
+  first_name: z.string().min(1).max(50),
+  last_name: z.string().min(1).max(50),
+  role: z.enum(['Pilot', 'Co-Pilot', 'Cabin Crew', 'Check-in Staff', 'Boarding Staff', 'Baggage Handler', 'Ramp Operator', 'Maintenance Crew', 'Supervisor']),
+  staff_type: z.enum(['Flight Crew', 'Ground Staff']),
+  hire_date: z.string().optional(),
+  license_number: z.string().max(100).optional(),
+  status: z.enum(['Active', 'On Leave', 'Inactive']).optional(),
+});
+
+export const staffUpdateSchema = z.object({
+  first_name: z.string().min(1).max(50).optional(),
+  last_name: z.string().min(1).max(50).optional(),
+  role: z.enum(['Pilot', 'Co-Pilot', 'Cabin Crew', 'Check-in Staff', 'Boarding Staff', 'Baggage Handler', 'Ramp Operator', 'Maintenance Crew', 'Supervisor']).optional(),
+  staff_type: z.enum(['Flight Crew', 'Ground Staff']).optional(),
+  license_number: z.string().max(100).optional(),
+  status: z.enum(['Active', 'On Leave', 'Inactive']).optional(),
+});
+
+// Shift validation schemas
+export const shiftCreateSchema = z.object({
+  staff_id: z.number().int().positive(),
+  shift_date: z.string(),
+  shift_start: z.string(),
+  shift_end: z.string(),
+  availability_status: z.enum(['Available', 'Assigned', 'Off']).optional(),
+});
+
+export const shiftUpdateSchema = z.object({
+  shift_date: z.string().optional(),
+  shift_start: z.string().optional(),
+  shift_end: z.string().optional(),
+  availability_status: z.enum(['Available', 'Assigned', 'Off']).optional(),
+});
+
+// Task validation schemas
+export const taskCreateSchema = z.object({
+  flight_schedule_id: z.number().int().positive(),
+  task_type: z.enum(['Pilot Operation', 'Cabin Preparation', 'Boarding', 'Baggage Loading', 'Baggage Unloading', 'Aircraft Cleaning', 'Technical Check']),
+  required_role: z.string().min(1).max(100),
+  start_time: z.string(),
+  end_time: z.string(),
+  task_status: z.enum(['Pending', 'Assigned', 'In Progress', 'Completed']).optional(),
+});
+
+export const taskUpdateSchema = z.object({
+  task_type: z.enum(['Pilot Operation', 'Cabin Preparation', 'Boarding', 'Baggage Loading', 'Baggage Unloading', 'Aircraft Cleaning', 'Technical Check']).optional(),
+  required_role: z.string().min(1).max(100).optional(),
+  start_time: z.string().optional(),
+  end_time: z.string().optional(),
+  task_status: z.enum(['Pending', 'Assigned', 'In Progress', 'Completed']).optional(),
+});
+
+// Task Assignment validation schemas
+export const taskAssignmentCreateSchema = z.object({
+  task_id: z.number().int().positive(),
+  staff_id: z.number().int().positive(),
+  assignment_status: z.enum(['Assigned', 'Completed', 'Cancelled']).optional(),
+  end_time: z.string().optional(),
+});
+
+export const taskAssignmentUpdateSchema = z.object({
+  assignment_status: z.enum(['Assigned', 'Completed', 'Cancelled']).optional(),
+  end_time: z.string().optional(),
 });

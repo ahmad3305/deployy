@@ -1,43 +1,51 @@
-import { NextResponse } from "next/server";
-import { NextRequest } from "next/server";
-import jwt from "jsonwebtoken";
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get("token")?.value;
+  const { pathname } = request.nextUrl;
 
-  const protectedRoutes = [
-    "/api/staff",
-    "/api/tasks",
-    "/api/payments",
-    "/api/admin"
+  // Skip auth routes
+  if (pathname.startsWith('/api/auth/')) {
+    return NextResponse.next();
+  }
+
+  // Skip non-API routes
+  if (!pathname.startsWith('/api')) {
+    return NextResponse.next();
+  }
+
+  // Public GET routes - no auth needed
+  const publicGetRoutes = [
+    '/api/airports',
+    '/api/airlines',
+    '/api/aircraft-types',
+    '/api/flights',
+    '/api/flight-schedules',
+    '/api/terminals',
+    '/api/gates',
+    '/api/runways',
   ];
 
-  const isProtected = protectedRoutes.some((route) =>
-    request.nextUrl.pathname.startsWith(route)
-  );
-
-  if (!isProtected) {
+  const isPublicGet = publicGetRoutes.some(route => pathname.startsWith(route)) 
+                      && request.method === 'GET';
+  
+  if (isPublicGet) {
     return NextResponse.next();
   }
 
-  if (!token) {
+  // For all other routes, require token (route handlers check roles)
+  const authHeader = request.headers.get('authorization');
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return NextResponse.json(
-      { success: false, message: "Unauthorized" },
+      { success: false, message: 'Authentication required' },
       { status: 401 }
     );
   }
 
-  try {
-    jwt.verify(token, process.env.JWT_SECRET as string);
-    return NextResponse.next();
-  } catch (error) {
-    return NextResponse.json(
-      { success: false, message: "Invalid Token" },
-      { status: 401 }
-    );
-  }
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/api/:path*"]
+  matcher: '/api/:path*',
 };
