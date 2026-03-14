@@ -48,3 +48,26 @@ export async function queryOne<T = any>(
 export async function getConnection() {
   return await pool.getConnection();
 }
+
+
+// Run queries safely inside a transaction
+export async function withTransaction<T>(
+  fn: (connection: import('mysql2/promise').PoolConnection) => Promise<T>
+): Promise<T> {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await fn(connection);
+    await connection.commit();
+    return result;
+  } catch (err) {
+    try {
+      await connection.rollback();
+    } catch {
+      // ignore rollback errors (rare, but possible)
+    }
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
