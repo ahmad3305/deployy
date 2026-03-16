@@ -1,4 +1,4 @@
-export const runtime = 'nodejs'; // Add this line at the top
+export const runtime = 'nodejs'; 
 
 import { NextRequest } from 'next/server';
 import { queryOne } from '@/lib/db';
@@ -9,12 +9,10 @@ export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
 
-    // Validate input
     if (!email || !password) {
       return errorResponse('Email and password are required', 400);
     }
 
-    // Find user with related staff/passenger info
     const user = await queryOne<any>(
       `SELECT 
         u.*,
@@ -34,12 +32,10 @@ export async function POST(request: NextRequest) {
       return errorResponse('Invalid email or password', 401);
     }
 
-    // Check if user is active
     if (!user.is_active) {
       return errorResponse('Account is deactivated. Please contact support.', 403);
     }
 
-    // Verify password
     const isValidPassword = await comparePassword(password, user.password_hash);
 
     if (!isValidPassword) {

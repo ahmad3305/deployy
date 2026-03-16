@@ -1,4 +1,4 @@
-export const runtime = 'nodejs'; // Add this line at the top
+export const runtime = 'nodejs'; 
 
 import { NextRequest } from 'next/server';
 import { requireAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
@@ -9,7 +9,6 @@ async function handler(req: AuthenticatedRequest) {
   try {
     const user = req.user!;
 
-    // Get full user details with staff/passenger info
     const userDetails = await queryOne(
       `SELECT 
         u.user_id, u.email, u.role, u.passenger_id, u.staff_id, u.is_active, u.created_at,

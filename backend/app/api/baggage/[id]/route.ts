@@ -3,7 +3,6 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { baggageUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/baggage/[id] - Get single baggage ==========
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -65,7 +64,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/baggage/[id] - Update baggage ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -77,7 +75,6 @@ export async function PUT(
       return errorResponse('Invalid baggage ID', 400);
     }
 
-    // Check if baggage exists
     const existing = await queryOne<any>(
       'SELECT * FROM Baggage WHERE Baggage_id = ?',
       [baggageId]
@@ -89,7 +86,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(baggageUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -97,19 +93,17 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Validate weight if being updated
     if (updateData.weight_kg !== undefined && updateData.weight_kg <= 0) {
       return errorResponse('Weight must be greater than 0', 400);
     }
 
-    // Status transition validation
     if (updateData.status) {
       const validTransitions: Record<string, string[]> = {
         'Checked-In': ['Loaded', 'Lost'],
         'Loaded': ['In Transit', 'Lost'],
         'In Transit': ['Unloaded', 'Lost'],
-        'Unloaded': ['Lost'], // Final state
-        'Lost': ['Unloaded'], // Can only recover lost baggage to Unloaded
+        'Unloaded': ['Lost'], 
+        'Lost': ['Unloaded'], 
       };
 
       const allowedStatuses = validTransitions[existing.status] || [];
@@ -121,7 +115,6 @@ export async function PUT(
       }
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -149,7 +142,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated baggage with joined data
     const updatedBaggage = await queryOne(
       `SELECT 
         b.*,
@@ -182,7 +174,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/baggage/[id] - Delete baggage ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -194,7 +185,6 @@ export async function DELETE(
       return errorResponse('Invalid baggage ID', 400);
     }
 
-    // Check if baggage exists
     const existing = await queryOne<any>(
       'SELECT * FROM Baggage WHERE Baggage_id = ?',
       [baggageId]
@@ -204,7 +194,6 @@ export async function DELETE(
       return notFoundResponse('Baggage not found');
     }
 
-    // Prevent deletion of baggage that's already loaded or in transit
     if (['Loaded', 'In Transit', 'Unloaded'].includes(existing.status)) {
       return errorResponse(
         `Cannot delete baggage with status ${existing.status}. Update status to Lost if needed.`,
@@ -212,7 +201,6 @@ export async function DELETE(
       );
     }
 
-    // Delete baggage
     await query('DELETE FROM Baggage WHERE Baggage_id = ?', [baggageId]);
 
     return noContentResponse();

@@ -338,3 +338,35 @@ export const taskAssignmentUpdateSchema = z.object({
   assignment_status: z.enum(['Assigned', 'Completed', 'Cancelled']).optional(),
   end_time: z.string().optional(),
 });
+
+
+// ===============================
+// Runway Booking (Private) schemas
+// ===============================
+export const runwayAvailabilitySchema = z.object({
+  airport_id: z.number().int().positive(),
+  booking_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+  start_time: z.string().regex(/^\d{2}:\d{2}:\d{2}$/),   // HH:MM:SS
+  end_time: z.string().regex(/^\d{2}:\d{2}:\d{2}$/),     // HH:MM:SS
+});
+
+export const privateRunwayBookingCreateSchema = z.object({
+  private_aircraft_id: z.number().int().positive(),
+  runway_id: z.number().int().positive(),
+  booking_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+  start_time: z.string().regex(/^\d{2}:\d{2}:\d{2}$/),   // HH:MM:SS
+  end_time: z.string().regex(/^\d{2}:\d{2}:\d{2}$/),     // HH:MM:SS
+});
+
+// =====================
+// Private Aircraft schemas
+// =====================
+export const privateAircraftCreateSchema = z.object({
+  registration_number: z.string().min(1).max(50),
+  model_name: z.string().min(1).max(100).optional().nullable(),
+  manufacturer: z.string().min(1).max(100).optional().nullable(),
+  seat_capacity: z.number().int().min(1).optional().nullable(),
+  status: z.enum(['Active', 'Maintenance', 'Retired']).optional().default('Active'),
+});
+
+export const privateAircraftUpdateSchema = privateAircraftCreateSchema.partial();
