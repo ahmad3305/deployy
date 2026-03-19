@@ -3,7 +3,6 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { flightIncidentUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/flight-incidents/[id] - Get single incident ==========
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -52,7 +51,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/flight-incidents/[id] - Update incident ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -64,7 +62,6 @@ export async function PUT(
       return errorResponse('Invalid incident ID', 400);
     }
 
-    // Check if incident exists
     const existing = await queryOne<any>(
       'SELECT * FROM Flight_incidents WHERE incident_id = ?',
       [incidentId]
@@ -76,7 +73,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(flightIncidentUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -84,17 +80,14 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // If marking as Resolved, set resolved_at if not provided
     if (updateData.flight_status === 'Resolved' && !updateData.resolved_at && !existing.resolved_at) {
       updateData.resolved_at = new Date().toISOString();
     }
 
-    // If marking as Open again, clear resolved_at
     if (updateData.flight_status === 'Open' && existing.flight_status === 'Resolved') {
       updateData.resolved_at = null as any;
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -126,7 +119,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated incident
     const updatedIncident = await queryOne(
       `SELECT 
         fi.*,
@@ -148,7 +140,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/flight-incidents/[id] - Delete incident ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -160,7 +151,6 @@ export async function DELETE(
       return errorResponse('Invalid incident ID', 400);
     }
 
-    // Check if incident exists
     const existing = await queryOne(
       'SELECT * FROM Flight_incidents WHERE incident_id = ?',
       [incidentId]
@@ -170,7 +160,6 @@ export async function DELETE(
       return notFoundResponse('Flight incident not found');
     }
 
-    // Delete incident
     await query('DELETE FROM Flight_incidents WHERE incident_id = ?', [incidentId]);
 
     return noContentResponse();

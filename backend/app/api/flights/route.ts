@@ -3,7 +3,6 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { flightCreateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/flights - Get all flights ==========
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -34,31 +33,26 @@ export async function GET(request: NextRequest) {
     `;
     const params: any[] = [];
 
-    // Filter by airline
     if (airline_id) {
       sql += ' AND f.airline_id = ?';
       params.push(parseInt(airline_id));
     }
 
-    // Filter by source airport
     if (source_airport_id) {
       sql += ' AND f.source_airport_id = ?';
       params.push(parseInt(source_airport_id));
     }
 
-    // Filter by destination airport
     if (destination_airport_id) {
       sql += ' AND f.destination_airport_id = ?';
       params.push(parseInt(destination_airport_id));
     }
 
-    // Filter by flight type
     if (flight_type) {
       sql += ' AND f.flight_type = ?';
       params.push(flight_type);
     }
 
-    // Filter by flight number
     if (flight_number) {
       sql += ' AND f.flight_number = ?';
       params.push(parseInt(flight_number));
@@ -75,12 +69,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ========== POST /api/flights - Create new flight ==========
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(flightCreateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -88,12 +80,10 @@ export async function POST(request: NextRequest) {
 
     const data = validation.data!;
 
-    // Verify source and destination are different
     if (data.source_airport_id === data.destination_airport_id) {
       return errorResponse('Source and destination airports must be different', 400);
     }
 
-    // Verify airline exists
     const airline = await queryOne(
       'SELECT airline_id FROM Airline WHERE airline_id = ?',
       [data.airline_id]
@@ -103,7 +93,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Airline not found', 404);
     }
 
-    // Verify source airport exists
     const sourceAirport = await queryOne(
       'SELECT airport_id FROM Airport WHERE airport_id = ?',
       [data.source_airport_id]
@@ -113,7 +102,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Source airport not found', 404);
     }
 
-    // Verify destination airport exists
     const destAirport = await queryOne(
       'SELECT airport_id FROM Airport WHERE airport_id = ?',
       [data.destination_airport_id]
@@ -123,7 +111,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Destination airport not found', 404);
     }
 
-    // Check if flight number already exists for this airline
     const existingFlight = await queryOne(
       'SELECT flight_id FROM Flights WHERE airline_id = ? AND flight_number = ?',
       [data.airline_id, data.flight_number]
@@ -133,7 +120,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Flight number already exists for this airline', 409);
     }
 
-    // Insert flight
     const result = await query<any>(
       `INSERT INTO Flights (
         airline_id, flight_number, source_airport_id, 
@@ -149,7 +135,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Fetch created flight with joined data
     const newFlight = await queryOne(
       `SELECT 
         f.*,

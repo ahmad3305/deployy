@@ -3,7 +3,6 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { flightConsolidationUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/flight-consolidations/[id] - Get single consolidation ==========
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -62,7 +61,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/flight-consolidations/[id] - Update consolidation ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -74,7 +72,6 @@ export async function PUT(
       return errorResponse('Invalid consolidation ID', 400);
     }
 
-    // Check if consolidation exists
     const existing = await queryOne<any>(
       'SELECT * FROM Flight_consolidation WHERE consolidation_id = ?',
       [consolidationId]
@@ -86,7 +83,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(flightConsolidationUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -94,7 +90,6 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -118,7 +113,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated consolidation
     const updatedConsolidation = await queryOne(
       `SELECT 
         fc.*,
@@ -140,7 +134,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/flight-consolidations/[id] - Delete consolidation ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -152,7 +145,6 @@ export async function DELETE(
       return errorResponse('Invalid consolidation ID', 400);
     }
 
-    // Check if consolidation exists
     const existing = await queryOne<any>(
       'SELECT * FROM Flight_consolidation WHERE consolidation_id = ?',
       [consolidationId]
@@ -162,11 +154,7 @@ export async function DELETE(
       return notFoundResponse('Flight consolidation not found');
     }
 
-    // Delete consolidation
     await query('DELETE FROM Flight_consolidation WHERE consolidation_id = ?', [consolidationId]);
-
-    // Note: Original flight status remains Cancelled even after deletion
-    // This is intentional as the flight was already cancelled
 
     return noContentResponse();
   } catch (error: any) {

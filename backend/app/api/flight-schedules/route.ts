@@ -3,7 +3,6 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { flightScheduleCreateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/flight-schedules - Get all flight schedules ==========
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -46,37 +45,31 @@ export async function GET(request: NextRequest) {
     `;
     const params: any[] = [];
 
-    // Filter by flight
     if (flight_id) {
       sql += ' AND fs.flight_id = ?';
       params.push(parseInt(flight_id));
     }
 
-    // Filter by aircraft
     if (aircraft_id) {
       sql += ' AND fs.aircraft_id = ?';
       params.push(parseInt(aircraft_id));
     }
 
-    // Filter by flight status
     if (flight_status) {
       sql += ' AND fs.flight_status = ?';
       params.push(flight_status);
     }
 
-    // Filter by departure date
     if (departure_date) {
       sql += ' AND DATE(fs.departure_datetime) = ?';
       params.push(departure_date);
     }
 
-    // Filter by source airport
     if (source_airport_id) {
       sql += ' AND f.source_airport_id = ?';
       params.push(parseInt(source_airport_id));
     }
 
-    // Filter by destination airport
     if (destination_airport_id) {
       sql += ' AND f.destination_airport_id = ?';
       params.push(parseInt(destination_airport_id));
@@ -93,12 +86,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ========== POST /api/flight-schedules - Create new flight schedule ==========
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(flightScheduleCreateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -106,7 +97,6 @@ export async function POST(request: NextRequest) {
 
     const data = validation.data!;
 
-    // Verify flight exists
     const flight = await queryOne(
       'SELECT * FROM Flights WHERE flight_id = ?',
       [data.flight_id]
@@ -116,7 +106,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Flight not found', 404);
     }
 
-    // Verify aircraft exists and is active
     const aircraft = await queryOne<any>(
       'SELECT * FROM Aircraft WHERE aircraft_id = ?',
       [data.aircraft_id]
@@ -130,7 +119,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Aircraft is not active', 400);
     }
 
-    // Verify gate exists
     const gate = await queryOne(
       'SELECT * FROM Gates WHERE gate_id = ?',
       [data.gate_id]
@@ -140,7 +128,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Gate not found', 404);
     }
 
-    // Check if arrival is after departure
     const departureTime = new Date(data.departure_datetime);
     const arrivalTime = new Date(data.arrival_datetime);
 
@@ -148,7 +135,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Arrival time must be after departure time', 400);
     }
 
-    // Check if aircraft is available (not scheduled for another flight at the same time)
     const aircraftConflict = await queryOne(
       `SELECT flight_schedule_id FROM Flight_schedules 
        WHERE aircraft_id = ? 
@@ -170,7 +156,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Aircraft is already scheduled for another flight at this time', 409);
     }
 
-    // Check if gate is available
     const gateConflict = await queryOne(
       `SELECT flight_schedule_id FROM Flight_schedules 
        WHERE gate_id = ? 
@@ -192,7 +177,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Gate is already assigned to another flight at this time', 409);
     }
 
-    // Insert flight schedule
     const result = await query<any>(
       `INSERT INTO Flight_schedules (
         flight_id, aircraft_id, departure_datetime, 
@@ -207,7 +191,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Fetch created schedule with joined data
     const newSchedule = await queryOne(
       `SELECT 
         fs.*,

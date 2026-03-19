@@ -3,7 +3,6 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { baggageCreateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/baggage - Get all baggage ==========
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -44,31 +43,26 @@ export async function GET(request: NextRequest) {
     `;
     const params: any[] = [];
 
-    // Filter by ticket
     if (ticket_id) {
       sql += ' AND b.ticket_id = ?';
       params.push(parseInt(ticket_id));
     }
 
-    // Filter by flight schedule
     if (flight_schedule_id) {
       sql += ' AND b.flight_schedule_id = ?';
       params.push(parseInt(flight_schedule_id));
     }
 
-    // Filter by passenger
     if (passenger_id) {
       sql += ' AND p.passenger_id = ?';
       params.push(parseInt(passenger_id));
     }
 
-    // Filter by status
     if (status) {
       sql += ' AND b.status = ?';
       params.push(status);
     }
 
-    // Filter by baggage type
     if (baggage_type) {
       sql += ' AND b.baggage_type = ?';
       params.push(baggage_type);
@@ -85,12 +79,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ========== POST /api/baggage - Create new baggage ==========
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(baggageCreateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -98,7 +90,6 @@ export async function POST(request: NextRequest) {
 
     const data = validation.data!;
 
-    // Verify ticket exists
     const ticket = await queryOne<any>(
       'SELECT * FROM Tickets WHERE ticket_id = ?',
       [data.ticket_id]
@@ -108,7 +99,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Ticket not found', 404);
     }
 
-    // Verify flight schedule exists
     const schedule = await queryOne<any>(
       'SELECT * FROM Flight_schedules WHERE flight_schedule_id = ?',
       [data.flight_schedule_id]
@@ -118,17 +108,14 @@ export async function POST(request: NextRequest) {
       return errorResponse('Flight schedule not found', 404);
     }
 
-    // Verify ticket belongs to the flight schedule
     if (ticket.flight_schedule_id !== data.flight_schedule_id) {
       return errorResponse('Ticket does not belong to this flight schedule', 400);
     }
 
-    // Check if ticket is cancelled
     if (ticket.status === 'Cancelled') {
       return errorResponse('Cannot add baggage to cancelled ticket', 400);
     }
 
-    // Check if flight is cancelled or completed
     if (schedule.flight_status === 'Cancelled') {
       return errorResponse('Cannot add baggage to cancelled flight', 400);
     }
@@ -137,12 +124,10 @@ export async function POST(request: NextRequest) {
       return errorResponse('Cannot add baggage to completed flight', 400);
     }
 
-    // Validate weight
     if (data.weight_kg <= 0) {
       return errorResponse('Weight must be greater than 0', 400);
     }
 
-    // Insert baggage
     const result = await query<any>(
       `INSERT INTO Baggage (
         ticket_id, flight_schedule_id, weight, 
@@ -157,7 +142,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Fetch created baggage with joined data
     const newBaggage = await queryOne(
       `SELECT 
         b.*,

@@ -3,7 +3,6 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { airportUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/airports/[id] - Get single airport ==========
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -31,7 +30,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/airports/[id] - Update airport ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -43,7 +41,6 @@ export async function PUT(
       return errorResponse('Invalid airport ID', 400);
     }
 
-    // Check if airport exists
     const existing = await queryOne(
       'SELECT * FROM Airport WHERE airport_id = ?',
       [airportId]
@@ -55,7 +52,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(airportUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -63,7 +59,6 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Check if airport_code is being changed and if it's unique
     if (updateData.airport_code && updateData.airport_code !== (existing as any).airport_code) {
       const codeExists = await queryOne(
         'SELECT airport_id FROM Airport WHERE airport_code = ? AND airport_id != ?',
@@ -75,7 +70,6 @@ export async function PUT(
       }
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -111,7 +105,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated airport
     const updatedAirport = await queryOne(
       'SELECT * FROM Airport WHERE airport_id = ?',
       [airportId]
@@ -124,7 +117,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/airports/[id] - Delete airport ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -136,7 +128,6 @@ export async function DELETE(
       return errorResponse('Invalid airport ID', 400);
     }
 
-    // Check if airport exists
     const existing = await queryOne(
       'SELECT * FROM Airport WHERE airport_id = ?',
       [airportId]
@@ -156,7 +147,6 @@ export async function DELETE(
       return errorResponse('Cannot delete airport with existing source flights', 409);
     }
 
-    // Check if airport has flights as destination
     const hasDestFlights = await queryOne(
       'SELECT COUNT(*) as count FROM Flights WHERE destination_airport_id = ?',
       [airportId]
@@ -166,7 +156,6 @@ export async function DELETE(
       return errorResponse('Cannot delete airport with existing destination flights', 409);
     }
 
-    // Check if airport has staff
     const hasStaff = await queryOne(
       'SELECT COUNT(*) as count FROM Staff WHERE airport_id = ?',
       [airportId]
@@ -176,7 +165,6 @@ export async function DELETE(
       return errorResponse('Cannot delete airport with existing staff', 409);
     }
 
-    // Check if airport has terminals
     const hasTerminals = await queryOne(
       'SELECT COUNT(*) as count FROM Terminals WHERE airport_id = ?',
       [airportId]
@@ -186,7 +174,6 @@ export async function DELETE(
       return errorResponse('Cannot delete airport with existing terminals', 409);
     }
 
-    // Check if airport has runways
     const hasRunways = await queryOne(
       'SELECT COUNT(*) as count FROM Runways WHERE airport_id = ?',
       [airportId]
@@ -196,7 +183,6 @@ export async function DELETE(
       return errorResponse('Cannot delete airport with existing runways', 409);
     }
 
-    // Delete airport
     await query('DELETE FROM Airport WHERE airport_id = ?', [airportId]);
 
     return noContentResponse();

@@ -255,7 +255,7 @@ CREATE TABLE `Staff` (
   `role` ENUM( 'Pilot', 'Co-Pilot', 'Cabin Crew', 'Check-in Staff', 'Boarding Staff', 'Baggage Handler', 'Ramp Operator', 'Maintenance Crew', 'Supervisor' ) NOT NULL,
   `staff_type` ENUM('Flight Crew','Ground Staff') NOT NULL,
   `hire_date` DATE,
-  `license_number` varchar(100), -- only for pilots
+  `license_number` varchar(100), 
   `status` ENUM('Active','On Leave','Inactive') DEFAULT 'Active',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`staff_id`),
@@ -365,6 +365,27 @@ CREATE TABLE `Flight_runway_usage` (
       REFERENCES `Runways`(`runway_id`),
   FOREIGN KEY (`flight_schedule_id`)
       REFERENCES `Flight_schedules`(`flight_schedule_id`)
+);
+
+
+CREATE TABLE Aircraft_Type_Crew_Requirements (
+  aircraft_type_id INT NOT NULL,
+  role_required ENUM('Pilot','Co-Pilot','Cabin Crew') NOT NULL,
+  number_required INT NOT NULL,
+  PRIMARY KEY (aircraft_type_id, role_required),
+  FOREIGN KEY (aircraft_type_id) REFERENCES Aircraft_types(aircraft_type_id)
+);
+
+CREATE TABLE IF NOT EXISTS private_aircraft (
+  private_aircraft_id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  registration_number VARCHAR(50) NOT NULL UNIQUE,
+  model_name VARCHAR(100),
+  manufacturer VARCHAR(100),
+  seat_capacity INT,
+  status ENUM('Active','Maintenance','Retired') NOT NULL DEFAULT 'Active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
 
 -- ======== Constraints ========
@@ -547,3 +568,25 @@ SELECT
 FROM Task_Assignments ta
 JOIN Staff s ON ta.staff_id = s.staff_id
 JOIN Tasks t ON ta.task_id = t.task_id;
+
+
+CREATE TABLE `Users` (
+  `user_id` int AUTO_INCREMENT,
+  `email` varchar(255) NOT NULL UNIQUE,
+  `password_hash` varchar(255) NOT NULL,
+  `role` ENUM('Admin', 'Staff', 'Customer') DEFAULT 'Customer',
+  `passenger_id` int NULL,
+  `staff_id` int NULL,
+  `is_active` BOOLEAN DEFAULT TRUE,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`),
+  FOREIGN KEY (`passenger_id`) REFERENCES `Passengers`(`passenger_id`) ON DELETE SET NULL,
+  FOREIGN KEY (`staff_id`) REFERENCES `Staff`(`staff_id`) ON DELETE SET NULL
+);
+
+INSERT INTO Users (email, password_hash, role) VALUES
+('admin@airport.com', '$2b$10$XQkj9YRJyv5PZQ3h5xKzH.P5fJ3mK8lN7rX2vZ9jW4qT5uL6mN8pO', 'Admin'),
+('staff@airport.com', '$2b$10$YRkj9YRJyv5PZQ3h5xKzH.P5fJ3mK8lN7rX2vZ9jW4qT5uL6mN8pP', 'Staff'),
+('customer@airport.com', '$2b$10$ZRkj9YRJyv5PZQ3h5xKzH.P5fJ3mK8lN7rX2vZ9jW4qT5uL6mN8pQ', 'Customer');
+

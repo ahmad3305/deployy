@@ -7,7 +7,16 @@ export type FlightStatus =
   | 'Completed'
   | 'Consolidated';
 
-export type CrewRole = 'Pilot' | 'Co-Pilot' | 'Cabin Crew';
+export type CrewRole =
+  | 'Pilot'
+  | 'Co-Pilot'
+  | 'Cabin Crew'
+  | 'Check-in Staff'
+  | 'Boarding Staff'
+  | 'Baggage Handler'
+  | 'Ramp Operator'
+  | 'Maintenance Crew'
+  | 'Supervisor';
 
 export type CrewShortage = {
   role: CrewRole;
@@ -28,9 +37,8 @@ export type CrewValidationResult =
       kind: 'ok';
     };
 
-
 export function statusFromCrewValidation(res: CrewValidationResult): FlightStatus {
-  if (res.kind === 'pending_schedule') return 'Consolidated';
+  if (res.kind === 'pending_schedule') return 'Scheduled';
   if (res.kind === 'insufficient_crew') return 'Delayed';
   return 'Scheduled';
 }

@@ -1,0 +1,2120 @@
+openapi: 3.0.3
+
+info:
+  title: Jahhaazzz API
+  version: "1.0.0"
+  description: |
+    REST API for Jahhaazzz.
+
+    Standard response envelope:
+    - successResponse: { success: true, message: string, data: any }
+    - errorResponse:   { success: false, message: string, errors?: any }
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Auth
+  - name: Aircraft
+  - name: AircraftTypes
+  - name: Airlines
+  - name: Airports
+  - name: Baggage
+  - name: BoardingRecords
+  - name: Cargo
+  - name: CrewRequirements
+  - name: FlightConsolidation
+  - name: FlightIncidents
+  - name: FlightSchedules
+  - name: Flights
+  - name: Gates
+  - name: Passengers
+  - name: Payments
+  - name: Runways
+  - name: Shifts
+  - name: Staff
+  - name: TaskAssignments
+  - name: Tasks
+  - name: Terminal
+  - name: Tickets
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ---------- Standard envelopes ----------
+    SuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: Success }
+        data: { nullable: true }
+      required: [success, message, data]
+
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: Something went wrong }
+        errors: { nullable: true }
+      required: [success, message]
+
+    ValidationError:
+      type: object
+      properties:
+        path: { type: string, example: "seat_number" }
+        message: { type: string, example: "Required" }
+      required: [path, message]
+
+    ValidationErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorResponse"
+      example:
+        success: false
+        message: Validation failed
+        errors:
+          - path: seat_number
+            message: Required
+
+    # ---------- Shared enums (from validations.ts) ----------
+    SeatClass:
+      type: string
+      enum: [Economy, Business, First]
+
+    TicketStatus:
+      type: string
+      enum: [Confirmed, Checked-In, Boarded, Cancelled, Moved]
+
+    PaymentMethod:
+      type: string
+      enum: ["Credit Card", "Cash", "Online Transfer"]
+
+    PaymentStatus:
+      type: string
+      enum: [Pending, Completed, Failed]
+
+    FlightType:
+      type: string
+      enum: [Passenger, Cargo, Private]
+
+    FlightScheduleStatus:
+      type: string
+      enum: [Scheduled, Boarding, Departed, Delayed, Cancelled, Completed, Consolidated]
+
+    CargoType:
+      type: string
+      enum: [General, Perishable, Hazardous, Fragile, "Live Animals", Mail]
+
+    CargoStatus:
+      type: string
+      enum: [Booked, Loaded, "In Transit", Unloaded, "Customs Hold", Delivered, Cancelled]
+
+    BaggageType:
+      type: string
+      enum: [Checked, Carry-On, Special]
+
+    BaggageStatus:
+      type: string
+      enum: ["Checked-In", Loaded, "In Transit", Arrived, Claimed, Lost]
+
+    BoardingStatus:
+      type: string
+      enum: [Pending, Boarded, Denied]
+
+    IncidentType:
+      type: string
+      enum: ["Technical Issue", "Weather Delay", "Crew Issue", "Security Issue", Emergency]
+
+    IncidentStatus:
+      type: string
+      enum: [Open, Resolved]
+
+    AircraftStatus:
+      type: string
+      enum: [Active, Maintenance, Retired]
+
+    GateStatus:
+      type: string
+      enum: [Available, Occupied, Maintenance]
+
+    RunwayStatus:
+      type: string
+      enum: [Available, Closed, Maintenance]
+
+    StaffRole:
+      type: string
+      enum:
+        - Pilot
+        - Co-Pilot
+        - Cabin Crew
+        - Check-in Staff
+        - Boarding Staff
+        - Baggage Handler
+        - Ramp Operator
+        - Maintenance Crew
+        - Supervisor
+
+    StaffType:
+      type: string
+      enum: ["Flight Crew", "Ground Staff"]
+
+    StaffStatus:
+      type: string
+      enum: [Active, "On Leave", Inactive]
+
+    TaskType:
+      type: string
+      enum:
+        - Pilot Operation
+        - Cabin Preparation
+        - Boarding
+        - Baggage Loading
+        - Baggage Unloading
+        - Aircraft Cleaning
+        - Technical Check
+
+    TaskStatus:
+      type: string
+      enum: [Pending, Assigned, "In Progress", Completed]
+
+    TaskAssignmentStatus:
+      type: string
+      enum: [Assigned, Completed, Cancelled]
+
+    # ---------- Auth ----------
+    AuthLoginRequest:
+      type: object
+      properties:
+        email: { type: string, format: email, example: user@example.com }
+        password: { type: string, example: "secret123" }
+      required: [email, password]
+
+    # ---------- Airports (Zod -> OpenAPI) ----------
+    AirportCreateRequest:
+      type: object
+      properties:
+        airport_name: { type: string, minLength: 1, maxLength: 255 }
+        airport_code:
+          type: string
+          description: "IATA(3) or ICAO(4)"
+          example: LHE
+        city: { type: string, minLength: 1, maxLength: 100 }
+        country: { type: string, minLength: 1, maxLength: 100 }
+        timezone: { type: string, minLength: 1, maxLength: 100 }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+      required: [airport_name, airport_code, city, country, timezone]
+
+    AirportUpdateRequest:
+      type: object
+      properties:
+        airport_name: { type: string, maxLength: 255 }
+        airport_code: { type: string }
+        city: { type: string, maxLength: 100 }
+        country: { type: string, maxLength: 100 }
+        timezone: { type: string, maxLength: 100 }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+      additionalProperties: false
+
+    # ---------- Aircraft Types ----------
+    AircraftTypeCreateRequest:
+      type: object
+      properties:
+        model_name: { type: string, minLength: 1, maxLength: 100 }
+        manufacturer: { type: string, minLength: 1, maxLength: 100 }
+        seat_capacity: { type: integer, minimum: 1 }
+      required: [model_name, manufacturer, seat_capacity]
+
+    AircraftTypeUpdateRequest:
+      type: object
+      properties:
+        model_name: { type: string }
+        manufacturer: { type: string }
+        seat_capacity: { type: integer, minimum: 1 }
+      additionalProperties: false
+
+    # ---------- Aircraft ----------
+    AircraftCreateRequest:
+      type: object
+      properties:
+        airline_id: { type: integer, minimum: 1 }
+        aircraft_type_id: { type: integer, minimum: 1 }
+        registration_number: { type: string, minLength: 1, maxLength: 50 }
+        status: { $ref: "#/components/schemas/AircraftStatus", default: Active }
+        economy_seats: { type: integer, minimum: 0 }
+        business_seats: { type: integer, minimum: 0 }
+        first_class_seats: { type: integer, minimum: 0 }
+        max_speed_kmh: { type: integer, minimum: 1 }
+        fuel_capacity_litres: { type: integer, minimum: 1 }
+        manufactered_date:
+          type: string
+          example: "2020-01-31"
+        latest_maintenance:
+          type: string
+          nullable: true
+          example: "2026-03-01"
+        next_maintenance_due:
+          type: string
+          nullable: true
+          example: "2026-06-01"
+        current_airport: { type: integer, minimum: 1 }
+      required:
+        - airline_id
+        - aircraft_type_id
+        - registration_number
+        - economy_seats
+        - business_seats
+        - first_class_seats
+        - max_speed_kmh
+        - fuel_capacity_litres
+        - manufactered_date
+        - current_airport
+
+    AircraftUpdateRequest:
+      type: object
+      properties:
+        airline_id: { type: integer, minimum: 1 }
+        aircraft_type_id: { type: integer, minimum: 1 }
+        registration_number: { type: string }
+        status: { $ref: "#/components/schemas/AircraftStatus" }
+        economy_seats: { type: integer, minimum: 0 }
+        business_seats: { type: integer, minimum: 0 }
+        first_class_seats: { type: integer, minimum: 0 }
+        max_speed_kmh: { type: integer, minimum: 1 }
+        fuel_capacity_litres: { type: integer, minimum: 1 }
+        manufactered_date: { type: string }
+        latest_maintenance: { type: string, nullable: true }
+        next_maintenance_due: { type: string, nullable: true }
+        current_airport: { type: integer, minimum: 1 }
+      additionalProperties: false
+
+    # ---------- Flights ----------
+    FlightCreateRequest:
+      type: object
+      properties:
+        airline_id: { type: integer, minimum: 1 }
+        flight_number: { type: integer, minimum: 1 }
+        source_airport_id: { type: integer, minimum: 1 }
+        destination_airport_id: { type: integer, minimum: 1 }
+        flight_type: { $ref: "#/components/schemas/FlightType", default: Passenger }
+        estimated_duration:
+          type: string
+          description: "HH:MM:SS"
+          example: "01:30:00"
+      required: [airline_id, flight_number, source_airport_id, destination_airport_id, estimated_duration]
+
+    FlightUpdateRequest:
+      type: object
+      properties:
+        airline_id: { type: integer, minimum: 1 }
+        flight_number: { type: integer, minimum: 1 }
+        source_airport_id: { type: integer, minimum: 1 }
+        destination_airport_id: { type: integer, minimum: 1 }
+        flight_type: { $ref: "#/components/schemas/FlightType" }
+        estimated_duration: { type: string }
+      additionalProperties: false
+
+    # ---------- Flight schedules ----------
+    FlightScheduleCreateRequest:
+      type: object
+      properties:
+        flight_id: { type: integer, minimum: 1 }
+        aircraft_id: { type: integer, minimum: 1 }
+        departure_datetime: { type: string, example: "2026-03-14 12:00:00" }
+        arrival_datetime: { type: string, example: "2026-03-14 13:30:00" }
+        gate_id: { type: integer, minimum: 1 }
+        flight_status: { $ref: "#/components/schemas/FlightScheduleStatus", default: Scheduled }
+      required: [flight_id, aircraft_id, departure_datetime, arrival_datetime, gate_id]
+
+    FlightScheduleUpdateRequest:
+      type: object
+      properties:
+        flight_id: { type: integer, minimum: 1 }
+        aircraft_id: { type: integer, minimum: 1 }
+        departure_datetime: { type: string }
+        arrival_datetime: { type: string }
+        gate_id: { type: integer, minimum: 1 }
+        flight_status: { $ref: "#/components/schemas/FlightScheduleStatus" }
+      additionalProperties: false
+
+    # ---------- Passengers ----------
+    PassengerCreateRequest:
+      type: object
+      properties:
+        first_name: { type: string, minLength: 1, maxLength: 50 }
+        last_name: { type: string, minLength: 1, maxLength: 50 }
+        gender: { type: string, enum: [male, female] }
+        passport_number: { type: string, minLength: 1, maxLength: 50 }
+        nationality: { type: string, minLength: 1, maxLength: 50 }
+        date_of_birth: { type: string, example: "2000-01-01" }
+        contact_number: { type: string, minLength: 1, maxLength: 50 }
+        email: { type: string, format: email, maxLength: 50 }
+      required:
+        - first_name
+        - last_name
+        - gender
+        - passport_number
+        - nationality
+        - date_of_birth
+        - contact_number
+        - email
+
+    PassengerUpdateRequest:
+      type: object
+      properties:
+        first_name: { type: string }
+        last_name: { type: string }
+        gender: { type: string, enum: [male, female] }
+        passport_number: { type: string }
+        nationality: { type: string }
+        date_of_birth: { type: string }
+        contact_number: { type: string }
+        email: { type: string, format: email }
+      additionalProperties: false
+
+    # ---------- Tickets ----------
+    TicketCreateRequest:
+      type: object
+      properties:
+        passenger_id: { type: integer, minimum: 1 }
+        flight_schedule_id: { type: integer, minimum: 1 }
+        seat_number: { type: string, minLength: 1, maxLength: 50 }
+        seat_class: { $ref: "#/components/schemas/SeatClass" }
+        ticket_price: { type: integer, minimum: 1 }
+        status: { $ref: "#/components/schemas/TicketStatus", default: Confirmed }
+      required: [passenger_id, flight_schedule_id, seat_number, seat_class, ticket_price]
+
+    TicketUpdateRequest:
+      type: object
+      properties:
+        passenger_id: { type: integer, minimum: 1 }
+        flight_schedule_id: { type: integer, minimum: 1 }
+        seat_number: { type: string }
+        seat_class: { $ref: "#/components/schemas/SeatClass" }
+        ticket_price: { type: integer, minimum: 1 }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+      additionalProperties: false
+
+    # ---------- Cargo ----------
+    CargoCreateRequest:
+      type: object
+      properties:
+        flight_id: { type: integer, minimum: 1 }
+        tracking_number: { type: string, minLength: 1, maxLength: 10 }
+        cargo_type: { $ref: "#/components/schemas/CargoType" }
+        description: { type: string, nullable: true }
+        weight_kg: { type: number, minimum: 0.01 }
+        origin_airport_id: { type: integer, minimum: 1 }
+        destination_airport_id: { type: integer, minimum: 1 }
+        sender_name: { type: string, minLength: 1, maxLength: 50 }
+        sender_contact: { type: string, minLength: 1, maxLength: 50 }
+        reciever_name: { type: string, minLength: 1, maxLength: 50 }
+        reciever_contact: { type: string, minLength: 1, maxLength: 50 }
+        status: { $ref: "#/components/schemas/CargoStatus", default: Booked }
+        is_insured: { type: boolean, default: false }
+      required:
+        - flight_id
+        - tracking_number
+        - cargo_type
+        - weight_kg
+        - origin_airport_id
+        - destination_airport_id
+        - sender_name
+        - sender_contact
+        - reciever_name
+        - reciever_contact
+
+    CargoUpdateRequest:
+      type: object
+      properties:
+        flight_id: { type: integer, minimum: 1 }
+        tracking_number: { type: string }
+        cargo_type: { $ref: "#/components/schemas/CargoType" }
+        description: { type: string, nullable: true }
+        weight_kg: { type: number, minimum: 0.01 }
+        origin_airport_id: { type: integer, minimum: 1 }
+        destination_airport_id: { type: integer, minimum: 1 }
+        sender_name: { type: string }
+        sender_contact: { type: string }
+        reciever_name: { type: string }
+        reciever_contact: { type: string }
+        status: { $ref: "#/components/schemas/CargoStatus" }
+        is_insured: { type: boolean }
+      additionalProperties: false
+
+    # ---------- Payments ----------
+    PaymentCreateRequest:
+      type: object
+      properties:
+        ticket_id: { type: integer, minimum: 1, nullable: true }
+        cargo_id: { type: integer, minimum: 1, nullable: true }
+        amount: { type: number, minimum: 0.01 }
+        payment_method: { $ref: "#/components/schemas/PaymentMethod" }
+        payment_status: { $ref: "#/components/schemas/PaymentStatus", default: Pending }
+      required: [amount, payment_method]
+
+    PaymentUpdateRequest:
+      type: object
+      properties:
+        ticket_id: { type: integer, minimum: 1, nullable: true }
+        cargo_id: { type: integer, minimum: 1, nullable: true }
+        amount: { type: number, minimum: 0.01 }
+        payment_method: { $ref: "#/components/schemas/PaymentMethod" }
+        payment_status: { $ref: "#/components/schemas/PaymentStatus" }
+      additionalProperties: false
+
+    # ---------- Terminal ----------
+    TerminalCreateRequest:
+      type: object
+      properties:
+        airport_id: { type: integer, minimum: 1 }
+        terminal_name: { type: string, minLength: 1, maxLength: 50 }
+        terminal_code: { type: string, minLength: 1, maxLength: 10 }
+      required: [airport_id, terminal_name, terminal_code]
+
+    TerminalUpdateRequest:
+      type: object
+      properties:
+        terminal_name: { type: string, maxLength: 50 }
+        terminal_code: { type: string, maxLength: 10 }
+      additionalProperties: false
+
+    # ---------- Gate ----------
+    GateCreateRequest:
+      type: object
+      properties:
+        terminal_id: { type: integer, minimum: 1 }
+        gate_number: { type: string, minLength: 1, maxLength: 10 }
+        status: { $ref: "#/components/schemas/GateStatus" }
+      required: [terminal_id, gate_number]
+
+    GateUpdateRequest:
+      type: object
+      properties:
+        gate_number: { type: string, maxLength: 10 }
+        status: { $ref: "#/components/schemas/GateStatus" }
+      additionalProperties: false
+
+    # ---------- Runway ----------
+    RunwayCreateRequest:
+      type: object
+      properties:
+        airport_id: { type: integer, minimum: 1 }
+        runway_number: { type: string, minLength: 1, maxLength: 10 }
+        length_meters: { type: number, minimum: 0.01 }
+        width_meters: { type: number, minimum: 0.01 }
+        surface_type: { type: string, minLength: 1, maxLength: 50 }
+        status: { $ref: "#/components/schemas/RunwayStatus" }
+      required: [airport_id, runway_number, length_meters, width_meters, surface_type]
+
+    RunwayUpdateRequest:
+      type: object
+      properties:
+        runway_number: { type: string }
+        length_meters: { type: number, minimum: 0.01 }
+        width_meters: { type: number, minimum: 0.01 }
+        surface_type: { type: string }
+        status: { $ref: "#/components/schemas/RunwayStatus" }
+      additionalProperties: false
+
+    # ---------- Baggage ----------
+    BaggageCreateRequest:
+      type: object
+      properties:
+        ticket_id: { type: integer, minimum: 1 }
+        flight_schedule_id: { type: integer, minimum: 1 }
+        weight_kg: { type: number, minimum: 0.01 }
+        baggage_type: { $ref: "#/components/schemas/BaggageType" }
+        tag_number: { type: string, minLength: 1, maxLength: 20 }
+        status: { $ref: "#/components/schemas/BaggageStatus" }
+      required: [ticket_id, flight_schedule_id, weight_kg, baggage_type, tag_number]
+
+    BaggageUpdateRequest:
+      type: object
+      properties:
+        weight_kg: { type: number, minimum: 0.01 }
+        baggage_type: { $ref: "#/components/schemas/BaggageType" }
+        tag_number: { type: string }
+        status: { $ref: "#/components/schemas/BaggageStatus" }
+      additionalProperties: false
+
+    # ---------- Boarding records ----------
+    BoardingRecordCreateRequest:
+      type: object
+      properties:
+        ticket_id: { type: integer, minimum: 1 }
+        gate_id: { type: integer, minimum: 1 }
+        boarding_time: { type: string, format: date-time }
+        boarding_status: { $ref: "#/components/schemas/BoardingStatus" }
+      required: [ticket_id, gate_id, boarding_time]
+
+    BoardingRecordUpdateRequest:
+      type: object
+      properties:
+        gate_id: { type: integer, minimum: 1 }
+        boarding_time: { type: string, format: date-time }
+        boarding_status: { $ref: "#/components/schemas/BoardingStatus" }
+      additionalProperties: false
+
+    # ---------- Crew requirements ----------
+    CrewRequirementCreateRequest:
+      type: object
+      properties:
+        flight_schedule_id: { type: integer, minimum: 1 }
+        role_required: { type: string, minLength: 1, maxLength: 100 }
+        number_required: { type: integer, minimum: 1 }
+      required: [flight_schedule_id, role_required, number_required]
+
+    CrewRequirementUpdateRequest:
+      type: object
+      properties:
+        role_required: { type: string, maxLength: 100 }
+        number_required: { type: integer, minimum: 1 }
+      additionalProperties: false
+
+    # ---------- Flight incidents ----------
+    FlightIncidentCreateRequest:
+      type: object
+      properties:
+        flight_schedule_id: { type: integer, minimum: 1 }
+        incident_type: { $ref: "#/components/schemas/IncidentType" }
+        description: { type: string, nullable: true }
+        reported_at: { type: string, format: date-time, nullable: true }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        flight_status: { $ref: "#/components/schemas/IncidentStatus" }
+      required: [flight_schedule_id, incident_type]
+
+    FlightIncidentUpdateRequest:
+      type: object
+      properties:
+        incident_type: { $ref: "#/components/schemas/IncidentType" }
+        description: { type: string, nullable: true }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        flight_status: { $ref: "#/components/schemas/IncidentStatus" }
+      additionalProperties: false
+
+    # ---------- Shifts ----------
+    ShiftCreateRequest:
+      type: object
+      properties:
+        staff_id: { type: integer, minimum: 1 }
+        shift_date: { type: string }
+        shift_start: { type: string }
+        shift_end: { type: string }
+        availability_status: { type: string, enum: [Available, Assigned, Off] }
+      required: [staff_id, shift_date, shift_start, shift_end]
+
+    ShiftUpdateRequest:
+      type: object
+      properties:
+        shift_date: { type: string }
+        shift_start: { type: string }
+        shift_end: { type: string }
+        availability_status: { type: string, enum: [Available, Assigned, Off] }
+      additionalProperties: false
+
+    # ---------- Staff ----------
+    StaffCreateRequest:
+      type: object
+      properties:
+        airport_id: { type: integer, minimum: 1 }
+        first_name: { type: string, minLength: 1, maxLength: 50 }
+        last_name: { type: string, minLength: 1, maxLength: 50 }
+        role: { $ref: "#/components/schemas/StaffRole" }
+        staff_type: { $ref: "#/components/schemas/StaffType" }
+        hire_date: { type: string, nullable: true }
+        license_number: { type: string, maxLength: 100, nullable: true }
+        status: { $ref: "#/components/schemas/StaffStatus" }
+      required: [airport_id, first_name, last_name, role, staff_type]
+
+    StaffUpdateRequest:
+      type: object
+      properties:
+        first_name: { type: string }
+        last_name: { type: string }
+        role: { $ref: "#/components/schemas/StaffRole" }
+        staff_type: { $ref: "#/components/schemas/StaffType" }
+        license_number: { type: string, maxLength: 100 }
+        status: { $ref: "#/components/schemas/StaffStatus" }
+      additionalProperties: false
+
+    # ---------- Tasks ----------
+    TaskCreateRequest:
+      type: object
+      properties:
+        flight_schedule_id: { type: integer, minimum: 1 }
+        task_type: { $ref: "#/components/schemas/TaskType" }
+        required_role: { type: string, minLength: 1, maxLength: 100 }
+        start_time: { type: string }
+        end_time: { type: string }
+        task_status: { $ref: "#/components/schemas/TaskStatus" }
+      required: [flight_schedule_id, task_type, required_role, start_time, end_time]
+
+    TaskUpdateRequest:
+      type: object
+      properties:
+        task_type: { $ref: "#/components/schemas/TaskType" }
+        required_role: { type: string, maxLength: 100 }
+        start_time: { type: string }
+        end_time: { type: string }
+        task_status: { $ref: "#/components/schemas/TaskStatus" }
+      additionalProperties: false
+
+    # ---------- Task assignments ----------
+    TaskAssignmentCreateRequest:
+      type: object
+      properties:
+        task_id: { type: integer, minimum: 1 }
+        staff_id: { type: integer, minimum: 1 }
+        assignment_status: { $ref: "#/components/schemas/TaskAssignmentStatus" }
+        end_time: { type: string, nullable: true }
+      required: [task_id, staff_id]
+
+    TaskAssignmentUpdateRequest:
+      type: object
+      properties:
+        assignment_status: { $ref: "#/components/schemas/TaskAssignmentStatus" }
+        end_time: { type: string, nullable: true }
+      additionalProperties: false
+
+    # ---------- Flight consolidation ----------
+    FlightConsolidationCreateRequest:
+      type: object
+      properties:
+        original_flight_schedule_id: { type: integer, minimum: 1 }
+        new_flight_schedule_id: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 1, maxLength: 200 }
+        consolidation_date: { type: string, format: date-time }
+      required: [original_flight_schedule_id, new_flight_schedule_id, reason, consolidation_date]
+
+    FlightConsolidationUpdateRequest:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 200 }
+        consolidation_date: { type: string, format: date-time }
+      additionalProperties: false
+
+paths:
+  # -------------------- Special/Auth --------------------
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AuthLoginRequest" }
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+        "400":
+          description: Missing fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Account deactivated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user (JWT)
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/flight-consolidation/check:
+    post:
+      tags: [FlightConsolidation]
+      summary: Check flight consolidation feasibility
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Check result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/flight-consolidation/execute:
+    post:
+      tags: [FlightConsolidation]
+      summary: Execute flight consolidation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Consolidation executed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  # -------------------- CRUD Resources (from your tree) --------------------
+  /api/aircraft:
+    get:
+      tags: [Aircraft]
+      summary: List aircraft
+      responses:
+        "200":
+          description: Aircraft list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Aircraft]
+      summary: Create aircraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AircraftCreateRequest" }
+      responses:
+        "201":
+          description: Aircraft created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationErrorResponse" }
+
+  /api/aircraft/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Aircraft]
+      summary: Get aircraft by ID
+      responses:
+        "200":
+          description: Aircraft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    put:
+      tags: [Aircraft]
+      summary: Update aircraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AircraftUpdateRequest" }
+      responses:
+        "200":
+          description: Updated aircraft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Aircraft]
+      summary: Delete aircraft
+      responses:
+        "204":
+          description: Deleted
+
+  /api/aircraft-types:
+    get:
+      tags: [AircraftTypes]
+      summary: List aircraft types
+      responses:
+        "200":
+          description: Aircraft types list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [AircraftTypes]
+      summary: Create aircraft type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AircraftTypeCreateRequest" }
+      responses:
+        "201":
+          description: Aircraft type created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/aircraft-types/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [AircraftTypes]
+      summary: Get aircraft type by ID
+      responses:
+        "200":
+          description: Aircraft type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [AircraftTypes]
+      summary: Update aircraft type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AircraftTypeUpdateRequest" }
+      responses:
+        "200":
+          description: Updated aircraft type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [AircraftTypes]
+      summary: Delete aircraft type
+      responses:
+        "204":
+          description: Deleted
+
+  /api/airlines:
+    get:
+      tags: [Airlines]
+      summary: List airlines
+      responses:
+        "200":
+          description: Airlines list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Airlines]
+      summary: Create airline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Airline created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/airlines/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Airlines]
+      summary: Get airline by ID
+      responses:
+        "200":
+          description: Airline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Airlines]
+      summary: Update airline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Updated airline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Airlines]
+      summary: Delete airline
+      responses:
+        "204":
+          description: Deleted
+
+  /api/airports:
+    get:
+      tags: [Airports]
+      summary: List airports
+      responses:
+        "200":
+          description: Airports list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Airports]
+      summary: Create airport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AirportCreateRequest" }
+      responses:
+        "201":
+          description: Airport created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/airports/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Airports]
+      summary: Get airport by ID
+      responses:
+        "200":
+          description: Airport
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Airports]
+      summary: Update airport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AirportUpdateRequest" }
+      responses:
+        "200":
+          description: Updated airport
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Airports]
+      summary: Delete airport
+      responses:
+        "204":
+          description: Deleted
+
+  /api/baggage:
+    get:
+      tags: [Baggage]
+      summary: List baggage
+      responses:
+        "200":
+          description: Baggage list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Baggage]
+      summary: Create baggage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BaggageCreateRequest" }
+      responses:
+        "201":
+          description: Baggage created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/baggage/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Baggage]
+      summary: Get baggage by ID
+      responses:
+        "200":
+          description: Baggage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Baggage]
+      summary: Update baggage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BaggageUpdateRequest" }
+      responses:
+        "200":
+          description: Updated baggage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Baggage]
+      summary: Delete baggage
+      responses:
+        "204":
+          description: Deleted
+
+  /api/boarding-records:
+    get:
+      tags: [BoardingRecords]
+      summary: List boarding records
+      responses:
+        "200":
+          description: Boarding records list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [BoardingRecords]
+      summary: Create boarding record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BoardingRecordCreateRequest" }
+      responses:
+        "201":
+          description: Boarding record created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/boarding-records/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [BoardingRecords]
+      summary: Get boarding record by ID
+      responses:
+        "200":
+          description: Boarding record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [BoardingRecords]
+      summary: Update boarding record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BoardingRecordUpdateRequest" }
+      responses:
+        "200":
+          description: Updated boarding record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [BoardingRecords]
+      summary: Delete boarding record
+      responses:
+        "204":
+          description: Deleted
+
+  /api/cargo:
+    get:
+      tags: [Cargo]
+      summary: List cargo
+      responses:
+        "200":
+          description: Cargo list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Cargo]
+      summary: Create cargo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CargoCreateRequest" }
+      responses:
+        "201":
+          description: Cargo created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/cargo/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Cargo]
+      summary: Get cargo by ID
+      responses:
+        "200":
+          description: Cargo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Cargo]
+      summary: Update cargo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CargoUpdateRequest" }
+      responses:
+        "200":
+          description: Updated cargo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Cargo]
+      summary: Delete cargo
+      responses:
+        "204":
+          description: Deleted
+
+  /api/crew-requirements:
+    get:
+      tags: [CrewRequirements]
+      summary: List crew requirements
+      responses:
+        "200":
+          description: Crew requirements list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [CrewRequirements]
+      summary: Create crew requirement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CrewRequirementCreateRequest" }
+      responses:
+        "201":
+          description: Crew requirement created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/crew-requirements/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [CrewRequirements]
+      summary: Get crew requirement by ID
+      responses:
+        "200":
+          description: Crew requirement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [CrewRequirements]
+      summary: Update crew requirement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CrewRequirementUpdateRequest" }
+      responses:
+        "200":
+          description: Updated crew requirement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [CrewRequirements]
+      summary: Delete crew requirement
+      responses:
+        "204":
+          description: Deleted
+
+  /api/flight-incidents:
+    get:
+      tags: [FlightIncidents]
+      summary: List flight incidents
+      responses:
+        "200":
+          description: Flight incidents list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [FlightIncidents]
+      summary: Create flight incident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FlightIncidentCreateRequest" }
+      responses:
+        "201":
+          description: Flight incident created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/flight-incidents/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [FlightIncidents]
+      summary: Get flight incident by ID
+      responses:
+        "200":
+          description: Flight incident
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [FlightIncidents]
+      summary: Update flight incident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FlightIncidentUpdateRequest" }
+      responses:
+        "200":
+          description: Updated flight incident
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [FlightIncidents]
+      summary: Delete flight incident
+      responses:
+        "204":
+          description: Deleted
+
+  /api/flight-schedules:
+    get:
+      tags: [FlightSchedules]
+      summary: List flight schedules
+      responses:
+        "200":
+          description: Flight schedules list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [FlightSchedules]
+      summary: Create flight schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FlightScheduleCreateRequest" }
+      responses:
+        "201":
+          description: Flight schedule created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/flight-schedules/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [FlightSchedules]
+      summary: Get flight schedule by ID
+      responses:
+        "200":
+          description: Flight schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [FlightSchedules]
+      summary: Update flight schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FlightScheduleUpdateRequest" }
+      responses:
+        "200":
+          description: Updated flight schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [FlightSchedules]
+      summary: Delete flight schedule
+      responses:
+        "204":
+          description: Deleted
+
+  /api/flights:
+    get:
+      tags: [Flights]
+      summary: List flights
+      responses:
+        "200":
+          description: Flights list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Flights]
+      summary: Create flight
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FlightCreateRequest" }
+      responses:
+        "201":
+          description: Flight created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/flights/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Flights]
+      summary: Get flight by ID
+      responses:
+        "200":
+          description: Flight
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Flights]
+      summary: Update flight
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FlightUpdateRequest" }
+      responses:
+        "200":
+          description: Updated flight
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Flights]
+      summary: Delete flight
+      responses:
+        "204":
+          description: Deleted
+
+  /api/gates:
+    get:
+      tags: [Gates]
+      summary: List gates
+      responses:
+        "200":
+          description: Gates list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Gates]
+      summary: Create gate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GateCreateRequest" }
+      responses:
+        "201":
+          description: Gate created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/gates/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Gates]
+      summary: Get gate by ID
+      responses:
+        "200":
+          description: Gate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Gates]
+      summary: Update gate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GateUpdateRequest" }
+      responses:
+        "200":
+          description: Updated gate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Gates]
+      summary: Delete gate
+      responses:
+        "204":
+          description: Deleted
+
+  /api/passengers:
+    get:
+      tags: [Passengers]
+      summary: List passengers
+      responses:
+        "200":
+          description: Passengers list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Passengers]
+      summary: Create passenger
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PassengerCreateRequest" }
+      responses:
+        "201":
+          description: Passenger created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/passengers/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Passengers]
+      summary: Get passenger by ID
+      responses:
+        "200":
+          description: Passenger
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Passengers]
+      summary: Update passenger
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PassengerUpdateRequest" }
+      responses:
+        "200":
+          description: Updated passenger
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Passengers]
+      summary: Delete passenger
+      responses:
+        "204":
+          description: Deleted
+
+  /api/payments:
+    get:
+      tags: [Payments]
+      summary: List payments
+      responses:
+        "200":
+          description: Payments list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Payments]
+      summary: Create payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentCreateRequest" }
+      responses:
+        "201":
+          description: Payment created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/payments/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Payments]
+      summary: Get payment by ID
+      responses:
+        "200":
+          description: Payment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Payments]
+      summary: Update payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentUpdateRequest" }
+      responses:
+        "200":
+          description: Updated payment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Payments]
+      summary: Delete payment (Pending/Failed only)
+      responses:
+        "204":
+          description: Deleted
+
+  /api/runways:
+    get:
+      tags: [Runways]
+      summary: List runways
+      responses:
+        "200":
+          description: Runways list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Runways]
+      summary: Create runway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunwayCreateRequest" }
+      responses:
+        "201":
+          description: Runway created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/runways/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Runways]
+      summary: Get runway by ID
+      responses:
+        "200":
+          description: Runway
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Runways]
+      summary: Update runway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunwayUpdateRequest" }
+      responses:
+        "200":
+          description: Updated runway
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Runways]
+      summary: Delete runway
+      responses:
+        "204":
+          description: Deleted
+
+  /api/shifts:
+    get:
+      tags: [Shifts]
+      summary: List shifts
+      responses:
+        "200":
+          description: Shifts list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Shifts]
+      summary: Create shift
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShiftCreateRequest" }
+      responses:
+        "201":
+          description: Shift created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/shifts/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Shifts]
+      summary: Get shift by ID
+      responses:
+        "200":
+          description: Shift
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Shifts]
+      summary: Update shift
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShiftUpdateRequest" }
+      responses:
+        "200":
+          description: Updated shift
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Shifts]
+      summary: Delete shift
+      responses:
+        "204":
+          description: Deleted
+
+  /api/staff:
+    get:
+      tags: [Staff]
+      summary: List staff
+      responses:
+        "200":
+          description: Staff list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Staff]
+      summary: Create staff
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffCreateRequest" }
+      responses:
+        "201":
+          description: Staff created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/staff/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Staff]
+      summary: Get staff by ID
+      responses:
+        "200":
+          description: Staff
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Staff]
+      summary: Update staff
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffUpdateRequest" }
+      responses:
+        "200":
+          description: Updated staff
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Staff]
+      summary: Delete staff
+      responses:
+        "204":
+          description: Deleted
+
+  /api/task-assignments:
+    get:
+      tags: [TaskAssignments]
+      summary: List task assignments
+      responses:
+        "200":
+          description: Task assignments list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [TaskAssignments]
+      summary: Create task assignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskAssignmentCreateRequest" }
+      responses:
+        "201":
+          description: Task assignment created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/task-assignments/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [TaskAssignments]
+      summary: Get task assignment by ID
+      responses:
+        "200":
+          description: Task assignment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [TaskAssignments]
+      summary: Update task assignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskAssignmentUpdateRequest" }
+      responses:
+        "200":
+          description: Updated task assignment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [TaskAssignments]
+      summary: Delete task assignment
+      responses:
+        "204":
+          description: Deleted
+
+  /api/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks
+      responses:
+        "200":
+          description: Tasks list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Tasks]
+      summary: Create task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskCreateRequest" }
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/tasks/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Tasks]
+      summary: Get task by ID
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Tasks]
+      summary: Update task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskUpdateRequest" }
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Tasks]
+      summary: Delete task
+      responses:
+        "204":
+          description: Deleted
+
+  /api/terminal:
+    get:
+      tags: [Terminal]
+      summary: List terminals
+      responses:
+        "200":
+          description: Terminals list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Terminal]
+      summary: Create terminal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TerminalCreateRequest" }
+      responses:
+        "201":
+          description: Terminal created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/terminal/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Terminal]
+      summary: Get terminal by ID
+      responses:
+        "200":
+          description: Terminal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Terminal]
+      summary: Update terminal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TerminalUpdateRequest" }
+      responses:
+        "200":
+          description: Updated terminal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Terminal]
+      summary: Delete terminal
+      responses:
+        "204":
+          description: Deleted
+
+  /api/tickets:
+    get:
+      tags: [Tickets]
+      summary: List tickets
+      responses:
+        "200":
+          description: Tickets list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    post:
+      tags: [Tickets]
+      summary: Create/book ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketCreateRequest" }
+      responses:
+        "201":
+          description: Ticket created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  /api/tickets/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Tickets]
+      summary: Get ticket by ID
+      responses:
+        "200":
+          description: Ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    put:
+      tags: [Tickets]
+      summary: Update ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketUpdateRequest" }
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResponse" }
+    delete:
+      tags: [Tickets]
+      summary: Cancel/delete ticket
+      responses:
+        "204":
+          description: Deleted
