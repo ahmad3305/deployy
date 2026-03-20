@@ -16,6 +16,7 @@ export function middleware(request: NextRequest) {
 
   // Public GET routes - no auth needed
   const publicGetRoutes = [
+    '/api/passengers',
     '/api/airports',
     '/api/airlines',
     '/api/aircraft-types',

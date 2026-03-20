@@ -94,10 +94,17 @@ export const ticketCreateSchema = z.object({
   seat_number: z.string().min(1).max(50),
   seat_class: z.enum(['Economy', 'Business', 'First']),
   ticket_price: z.number().int().positive(),
-  status: z.enum(['Confirmed', 'Checked-In', 'Boarded', 'Cancelled', 'Moved']).default('Confirmed'),
 });
 
-export const ticketUpdateSchema = ticketCreateSchema.partial();
+// For updates (staff/admin), status can be changed:
+export const ticketUpdateSchema = z.object({
+  passenger_id: z.number().int().positive().optional(),
+  flight_schedule_id: z.number().int().positive().optional(),
+  seat_number: z.string().min(1).max(50).optional(),
+  seat_class: z.enum(['Economy', 'Business', 'First']).optional(),
+  ticket_price: z.number().int().positive().optional(),
+  status: z.enum(['Pending', 'Confirmed', 'Checked-In', 'Boarded', 'Cancelled', 'Moved']).optional(),
+});
 
 // ========== Cargo Validations ==========
 export const cargoCreateSchema = z.object({
@@ -119,15 +126,10 @@ export const cargoCreateSchema = z.object({
 export const cargoUpdateSchema = cargoCreateSchema.partial();
 
 // ========== Payment Validations ==========
-export const paymentCreateSchema = z.object({
-  ticket_id: z.number().int().positive().optional().nullable(),
-  cargo_id: z.number().int().positive().optional().nullable(),
-  amount: z.number().positive(),
+export const paymentCheckoutSchema = z.object({
+  ticket_id: z.number().int().positive(),
   payment_method: z.enum(['Credit Card', 'Cash', 'Online Transfer']),
-  payment_status: z.enum(['Pending', 'Completed', 'Failed']).default('Pending'),
 });
-
-export const paymentUpdateSchema = paymentCreateSchema.partial();
 
 // ========== Staff Validations ==========
 
