@@ -6,7 +6,12 @@ import { successResponse, errorResponse, createdResponse, validationErrorRespons
 import { staffCreateSchema, validateData } from '@/lib/validations';
 import { requireStaff, requireAdmin, AuthenticatedRequest } from '@/lib/auth-middleware';
 
-// ========== GET /api/staff - Get all staff (Staff+ only) ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 async function getHandler(req: AuthenticatedRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -60,7 +65,6 @@ async function getHandler(req: AuthenticatedRequest) {
 
 export const GET = requireStaff(getHandler);
 
-// ========== POST /api/staff - Create new staff (Admin only) ==========
 async function postHandler(req: AuthenticatedRequest) {
   try {
     const body = await req.json();
@@ -72,7 +76,6 @@ async function postHandler(req: AuthenticatedRequest) {
 
     const data = validation.data!;
 
-    // Verify airport exists
     const airport = await queryOne(
       'SELECT airport_id FROM Airport WHERE airport_id = ?',
       [data.airport_id]
@@ -82,7 +85,6 @@ async function postHandler(req: AuthenticatedRequest) {
       return errorResponse('Airport not found', 404);
     }
 
-    // Create staff
     const result = await query<any>(
       `INSERT INTO Staff (
         airport_id, first_name, last_name, role, staff_type,

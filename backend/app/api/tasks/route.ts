@@ -6,7 +6,12 @@ import { successResponse, errorResponse, createdResponse, validationErrorRespons
 import { taskCreateSchema, validateData } from '@/lib/validations';
 import { requireStaff, AuthenticatedRequest } from '@/lib/auth-middleware';
 
-// ========== GET /api/tasks - Get all tasks (Staff+) ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 async function getHandler(req: AuthenticatedRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -69,7 +74,6 @@ async function getHandler(req: AuthenticatedRequest) {
 
 export const GET = requireStaff(getHandler);
 
-// ========== POST /api/tasks - Create new task (Staff+) ==========
 async function postHandler(req: AuthenticatedRequest) {
   try {
     const body = await req.json();
@@ -81,7 +85,6 @@ async function postHandler(req: AuthenticatedRequest) {
 
     const data = validation.data!;
 
-    // Verify flight schedule exists
     const schedule = await queryOne(
       'SELECT * FROM Flight_Schedule WHERE flight_schedule_id = ?',
       [data.flight_schedule_id]
@@ -91,7 +94,6 @@ async function postHandler(req: AuthenticatedRequest) {
       return errorResponse('Flight schedule not found', 404);
     }
 
-    // Validate time constraints
     const startTime = new Date(data.start_time);
     const endTime = new Date(data.end_time);
 
@@ -99,7 +101,6 @@ async function postHandler(req: AuthenticatedRequest) {
       return errorResponse('End time must be after start time', 400);
     }
 
-    // Create task
     const result = await query<any>(
       `INSERT INTO Tasks (
         flight_schedule_id, task_type, required_role, 

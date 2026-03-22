@@ -3,6 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { flightScheduleUpdateSchema, validateData } from '@/lib/validations';
 
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

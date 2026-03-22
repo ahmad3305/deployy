@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { cargoUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/cargo/[id] - Get single cargo ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -53,7 +58,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/cargo/[id] - Update cargo ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -65,7 +69,6 @@ export async function PUT(
       return errorResponse('Invalid cargo ID', 400);
     }
 
-    // Check if cargo exists
     const existing = await queryOne<any>(
       'SELECT * FROM Cargo WHERE cargo_id = ?',
       [cargoId]
@@ -77,7 +80,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(cargoUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -85,7 +87,6 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Prevent updates to delivered or cancelled cargo (except status changes)
     if (existing.status === 'Delivered' && Object.keys(updateData).some(key => key !== 'status')) {
       return errorResponse('Cannot update delivered cargo (except status)', 400);
     }
@@ -94,7 +95,6 @@ export async function PUT(
       return errorResponse('Cannot update cancelled cargo (except status)', 400);
     }
 
-    // Check if tracking number is being changed and if it's unique
     if (updateData.tracking_number && updateData.tracking_number !== existing.tracking_number) {
       const trackingExists = await queryOne(
         'SELECT cargo_id FROM Cargo WHERE tracking_number = ? AND cargo_id != ?',
@@ -106,7 +106,6 @@ export async function PUT(
       }
     }
 
-    // Verify flight exists if being updated
     if (updateData.flight_id) {
       const flight = await queryOne(
         'SELECT flight_id FROM Flights WHERE flight_id = ?',
@@ -118,7 +117,6 @@ export async function PUT(
       }
     }
 
-    // Verify origin airport exists if being updated
     if (updateData.origin_airport_id) {
       const originAirport = await queryOne(
         'SELECT airport_id FROM Airport WHERE airport_id = ?',
@@ -130,7 +128,6 @@ export async function PUT(
       }
     }
 
-    // Verify destination airport exists if being updated
     if (updateData.destination_airport_id) {
       const destAirport = await queryOne(
         'SELECT airport_id FROM Airport WHERE airport_id = ?',
@@ -142,7 +139,6 @@ export async function PUT(
       }
     }
 
-    // Ensure origin and destination are different if both are being updated
     const newOriginId = updateData.origin_airport_id || existing.origin_airport_id;
     const newDestId = updateData.destination_airport_id || existing.destination_airport_id;
 
@@ -150,12 +146,10 @@ export async function PUT(
       return errorResponse('Origin and destination airports must be different', 400);
     }
 
-    // Validate weight if being updated
     if (updateData.weight_kg !== undefined && updateData.weight_kg <= 0) {
       return errorResponse('Weight must be greater than 0', 400);
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -223,7 +217,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated cargo with joined data
     const updatedCargo = await queryOne(
       `SELECT 
         c.*,
@@ -249,7 +242,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/cargo/[id] - Cancel/Delete cargo ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -261,7 +253,6 @@ export async function DELETE(
       return errorResponse('Invalid cargo ID', 400);
     }
 
-    // Check if cargo exists
     const existing = await queryOne<any>(
       'SELECT * FROM Cargo WHERE cargo_id = ?',
       [cargoId]
@@ -271,17 +262,14 @@ export async function DELETE(
       return notFoundResponse('Cargo not found');
     }
 
-    // Check if cargo is already cancelled
     if (existing.status === 'Cancelled') {
       return errorResponse('Cargo is already cancelled', 400);
     }
 
-    // Check if cargo is already delivered
     if (existing.status === 'Delivered') {
       return errorResponse('Cannot cancel delivered cargo', 400);
     }
 
-    // Soft delete: Update status to Cancelled
     await query(
       'UPDATE Cargo SET status = ? WHERE cargo_id = ?',
       ['Cancelled', cargoId]

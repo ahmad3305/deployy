@@ -4,6 +4,12 @@ import { withTransaction } from '@/lib/db';
 import { successResponse, errorResponse } from '@/lib/response';
 import { requireAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
 
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 async function postHandler(req: AuthenticatedRequest) {
   try {
     const user = req.user!;

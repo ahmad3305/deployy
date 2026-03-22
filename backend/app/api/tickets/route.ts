@@ -5,6 +5,12 @@ import { successResponse, errorResponse, createdResponse, validationErrorRespons
 import { ticketCreateSchema, validateData } from '@/lib/validations';
 import { requireAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
 
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 async function getHandler(req: AuthenticatedRequest) {
   try {
     const user = req.user!;

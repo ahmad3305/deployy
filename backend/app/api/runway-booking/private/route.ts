@@ -5,6 +5,12 @@ import { withTransaction } from '@/lib/db';
 import { createdResponse, errorResponse, validationErrorResponse } from '@/lib/response';
 import { privateRunwayBookingCreateSchema, validateData } from '@/lib/validations';
 
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 async function handler(req: AuthenticatedRequest) {
   try {
     const user = req.user!;
@@ -24,7 +30,6 @@ async function handler(req: AuthenticatedRequest) {
     }
 
     const result = await withTransaction(async (connection) => {
-      // 1) Ensure private aircraft belongs to logged-in user
       const [aircraftRows] = await connection.query<any[]>(
         `
         SELECT private_aircraft_id, user_id, registration_number, status
@@ -45,7 +50,6 @@ async function handler(req: AuthenticatedRequest) {
         return { ok: false as const, code: 400, message: 'Private aircraft is not Active' };
       }
 
-      // 2) Lock runway row to prevent race-condition bookings per runway
       const [runwayRows] = await connection.query<any[]>(
         `
         SELECT runway_id, runway_code, status
@@ -64,7 +68,6 @@ async function handler(req: AuthenticatedRequest) {
         return { ok: false as const, code: 400, message: 'Runway is not active' };
       }
 
-      // 3) Overlap check (Reserved/Approved block)
       const [overlapRows] = await connection.query<any[]>(
         `
         SELECT booking_id
@@ -86,7 +89,6 @@ async function handler(req: AuthenticatedRequest) {
         };
       }
 
-      // 4) Insert booking
       const [insertResult] = await connection.query<any>(
         `
         INSERT INTO Runway_bookings (
@@ -104,7 +106,6 @@ async function handler(req: AuthenticatedRequest) {
 
       const bookingId = insertResult.insertId;
 
-      // 5) Return created booking
       const [bookingRows] = await connection.query<any[]>(
         `
         SELECT

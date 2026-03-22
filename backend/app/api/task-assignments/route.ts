@@ -6,7 +6,12 @@ import { successResponse, errorResponse, createdResponse, validationErrorRespons
 import { taskAssignmentCreateSchema, validateData } from '@/lib/validations';
 import { requireStaff, AuthenticatedRequest } from '@/lib/auth-middleware';
 
-// ========== GET /api/task-assignments - Get all task assignments (Staff+) ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 async function getHandler(req: AuthenticatedRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -67,7 +72,6 @@ async function getHandler(req: AuthenticatedRequest) {
 
 export const GET = requireStaff(getHandler);
 
-// ========== POST /api/task-assignments - Create new task assignment (Staff+) ==========
 async function postHandler(req: AuthenticatedRequest) {
   try {
     const body = await req.json();
@@ -79,7 +83,6 @@ async function postHandler(req: AuthenticatedRequest) {
 
     const data = validation.data!;
 
-    // Verify task exists
     const task = await queryOne<any>(
       'SELECT * FROM Tasks WHERE task_id = ?',
       [data.task_id]
@@ -89,7 +92,6 @@ async function postHandler(req: AuthenticatedRequest) {
       return errorResponse('Task not found', 404);
     }
 
-    // Verify staff exists and is active
     const staff = await queryOne<any>(
       'SELECT * FROM Staff WHERE staff_id = ?',
       [data.staff_id]
@@ -103,7 +105,6 @@ async function postHandler(req: AuthenticatedRequest) {
       return errorResponse('Staff member is not active', 400);
     }
 
-    // Check if staff is already assigned to this task
     const existingAssignment = await queryOne(
       'SELECT assignment_id FROM Task_Assignments WHERE task_id = ? AND staff_id = ? AND assignment_status != ?',
       [data.task_id, data.staff_id, 'Cancelled']
@@ -113,7 +114,6 @@ async function postHandler(req: AuthenticatedRequest) {
       return errorResponse('Staff member is already assigned to this task', 409);
     }
 
-    // Check for conflicting assignments (time overlap)
     const conflicting = await queryOne(
       `SELECT ta.assignment_id 
        FROM Task_Assignments ta
@@ -131,7 +131,6 @@ async function postHandler(req: AuthenticatedRequest) {
       return errorResponse('Staff member has a conflicting assignment at this time', 409);
     }
 
-    // Create assignment
     const result = await query<any>(
       `INSERT INTO Task_Assignments (
         task_id, staff_id, assignment_time, assignment_status, end_time
@@ -144,7 +143,6 @@ async function postHandler(req: AuthenticatedRequest) {
       ]
     );
 
-    // Update task status to 'Assigned' if it was 'Pending'
     if (task.task_status === 'Pending') {
       await query(
         'UPDATE Tasks SET task_status = ? WHERE task_id = ?',

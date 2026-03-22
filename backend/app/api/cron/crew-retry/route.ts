@@ -10,6 +10,12 @@ import {
   autoAssignStaffForSchedule,
 } from '@/utils/crew-validator';
 
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 function requireCronSecret(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret');
   const expected = process.env.CRON_SECRET;

@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { gateCreateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/gates - Get all gates ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -28,25 +33,21 @@ export async function GET(request: NextRequest) {
     `;
     const params: any[] = [];
 
-    // Filter by terminal
     if (terminal_id) {
       sql += ' AND g.terminal_id = ?';
       params.push(parseInt(terminal_id));
     }
 
-    // Filter by airport
     if (airport_id) {
       sql += ' AND t.airport_id = ?';
       params.push(parseInt(airport_id));
     }
 
-    // Filter by status
     if (status) {
       sql += ' AND g.status = ?';
       params.push(status);
     }
 
-    // Filter by gate number
     if (gate_number) {
       sql += ' AND g.gate_number = ?';
       params.push(gate_number);
@@ -63,12 +64,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ========== POST /api/gates - Create new gate ==========
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(gateCreateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -76,7 +75,6 @@ export async function POST(request: NextRequest) {
 
     const data = validation.data!;
 
-    // Verify terminal exists
     const terminal = await queryOne(
       'SELECT terminal_id FROM Terminals WHERE terminal_id = ?',
       [data.terminal_id]
@@ -86,7 +84,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Terminal not found', 404);
     }
 
-    // Check if gate number already exists in this terminal
     const existingGate = await queryOne(
       'SELECT gate_id FROM Gates WHERE terminal_id = ? AND gate_number = ?',
       [data.terminal_id, data.gate_number]
@@ -96,7 +93,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Gate with this number already exists in this terminal', 409);
     }
 
-    // Insert gate
     const result = await query<any>(
       `INSERT INTO Gates (
         terminal_id, gate_number, status
@@ -108,7 +104,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Fetch created gate with joined data
     const newGate = await queryOne(
       `SELECT 
         g.*,

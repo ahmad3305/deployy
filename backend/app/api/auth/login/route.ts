@@ -1,16 +1,30 @@
-export const runtime = 'nodejs'; 
+export const runtime = 'nodejs';
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { comparePassword, generateToken } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/response';
+
+const allowedOrigin = 'http://localhost:3001'; // Make sure this matches your frontend port
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': allowedOrigin,
+      'Access-Control-Allow-Methods': 'POST,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
 
     if (!email || !password) {
-      return errorResponse('Email and password are required', 400);
+      return withCORS(errorResponse('Email and password are required', 400));
     }
 
     const user = await queryOne<any>(
@@ -29,20 +43,19 @@ export async function POST(request: NextRequest) {
     );
 
     if (!user) {
-      return errorResponse('Invalid email or password', 401);
+      return withCORS(errorResponse('Invalid email or password', 401));
     }
 
     if (!user.is_active) {
-      return errorResponse('Account is deactivated. Please contact support.', 403);
+      return withCORS(errorResponse('Account is deactivated. Please contact support.', 403));
     }
 
     const isValidPassword = await comparePassword(password, user.password_hash);
 
     if (!isValidPassword) {
-      return errorResponse('Invalid email or password', 401);
+      return withCORS(errorResponse('Invalid email or password', 401));
     }
 
-    // Generate token
     const token = generateToken({
       user_id: user.user_id,
       email: user.email,
@@ -51,7 +64,7 @@ export async function POST(request: NextRequest) {
       staff_id: user.staff_id,
     });
 
-    return successResponse(
+    return withCORS(successResponse(
       {
         token,
         user: {
@@ -69,9 +82,14 @@ export async function POST(request: NextRequest) {
         },
       },
       'Login successful'
-    );
+    ));
   } catch (error: any) {
     console.error('Login error:', error);
-    return errorResponse('Login failed: ' + error.message, 500);
+    return withCORS(errorResponse('Login failed: ' + error.message, 500));
   }
+}
+
+function withCORS(resp: Response) {
+  resp.headers.set('Access-Control-Allow-Origin', allowedOrigin);
+  return resp;
 }

@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { terminalUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/terminals/[id] - Get single terminal ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -43,7 +48,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/terminals/[id] - Update terminal ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -55,7 +59,6 @@ export async function PUT(
       return errorResponse('Invalid terminal ID', 400);
     }
 
-    // Check if terminal exists
     const existing = await queryOne<any>(
       'SELECT * FROM Terminals WHERE terminal_id = ?',
       [terminalId]
@@ -67,7 +70,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(terminalUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -75,7 +77,6 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Check if terminal name is being changed and if it's unique at this airport
     if (updateData.terminal_name && updateData.terminal_name !== existing.terminal_name) {
       const nameExists = await queryOne(
         'SELECT terminal_id FROM Terminals WHERE airport_id = ? AND terminal_name = ? AND terminal_id != ?',
@@ -87,7 +88,6 @@ export async function PUT(
       }
     }
 
-    // Check if terminal code is being changed and if it's unique at this airport
     if (updateData.terminal_code && updateData.terminal_code !== existing.terminal_code) {
       const codeExists = await queryOne(
         'SELECT terminal_id FROM Terminals WHERE airport_id = ? AND terminal_code = ? AND terminal_id != ?',
@@ -99,7 +99,6 @@ export async function PUT(
       }
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -123,7 +122,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated terminal with joined data
     const updatedTerminal = await queryOne(
       `SELECT 
         t.*,
@@ -144,7 +142,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/terminals/[id] - Delete terminal ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -156,7 +153,6 @@ export async function DELETE(
       return errorResponse('Invalid terminal ID', 400);
     }
 
-    // Check if terminal exists
     const existing = await queryOne(
       'SELECT * FROM Terminals WHERE terminal_id = ?',
       [terminalId]
@@ -166,7 +162,6 @@ export async function DELETE(
       return notFoundResponse('Terminal not found');
     }
 
-    // Check if terminal has gates
     const hasGates = await queryOne<any>(
       'SELECT COUNT(*) as count FROM Gates WHERE terminal_id = ?',
       [terminalId]
@@ -176,7 +171,6 @@ export async function DELETE(
       return errorResponse('Cannot delete terminal with existing gates', 409);
     }
 
-    // Delete terminal
     await query('DELETE FROM Terminals WHERE terminal_id = ?', [terminalId]);
 
     return noContentResponse();

@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { passengerUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/passengers/[id] - Get single passenger ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -31,7 +36,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/passengers/[id] - Update passenger ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -43,7 +47,6 @@ export async function PUT(
       return errorResponse('Invalid passenger ID', 400);
     }
 
-    // Check if passenger exists
     const existing = await queryOne(
       'SELECT * FROM Passengers WHERE passenger_id = ?',
       [passengerId]
@@ -55,7 +58,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(passengerUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -63,7 +65,6 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Check if email is being changed and if it's unique
     if (updateData.email && updateData.email !== (existing as any).email) {
       const emailExists = await queryOne(
         'SELECT passenger_id FROM Passengers WHERE email = ? AND passenger_id != ?',
@@ -75,7 +76,6 @@ export async function PUT(
       }
     }
 
-    // Check if passport number is being changed and if it's unique
     if (updateData.passport_number && updateData.passport_number !== (existing as any).passport_number) {
       const passportExists = await queryOne(
         'SELECT passenger_id FROM Passengers WHERE passport_number = ? AND passenger_id != ?',
@@ -87,7 +87,6 @@ export async function PUT(
       }
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -135,7 +134,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated passenger
     const updatedPassenger = await queryOne(
       'SELECT * FROM Passengers WHERE passenger_id = ?',
       [passengerId]
@@ -148,7 +146,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/passengers/[id] - Delete passenger ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -160,7 +157,6 @@ export async function DELETE(
       return errorResponse('Invalid passenger ID', 400);
     }
 
-    // Check if passenger exists
     const existing = await queryOne(
       'SELECT * FROM Passengers WHERE passenger_id = ?',
       [passengerId]
@@ -170,7 +166,6 @@ export async function DELETE(
       return notFoundResponse('Passenger not found');
     }
 
-    // Check if passenger has tickets
     const hasTickets = await queryOne(
       'SELECT COUNT(*) as count FROM Tickets WHERE passenger_id = ?',
       [passengerId]
@@ -180,7 +175,6 @@ export async function DELETE(
       return errorResponse('Cannot delete passenger with existing tickets', 409);
     }
 
-    // Delete passenger
     await query('DELETE FROM Passengers WHERE passenger_id = ?', [passengerId]);
 
     return noContentResponse();

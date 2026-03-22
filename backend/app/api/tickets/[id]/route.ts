@@ -5,13 +5,18 @@ import { successResponse, errorResponse, notFoundResponse, validationErrorRespon
 import { ticketUpdateSchema, validateData } from '@/lib/validations';
 import { requireAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
 
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 function canAccessTicket(user: AuthenticatedRequest['user'], ticket: any) {
   if (!user) return false;
   if (user.role === 'Admin' || user.role === 'Staff') return true;
   return user.role === 'Customer' && !!user.passenger_id && user.passenger_id === ticket.passenger_id;
 }
 
-// ========== GET /api/tickets/[id] - Get single ticket ==========
 async function getHandler(req: AuthenticatedRequest, ticketId: number) {
   const user = req.user!;
 
@@ -84,7 +89,6 @@ export const GET = requireAuth(async (req: AuthenticatedRequest) => {
   }
 });
 
-// ========== PUT /api/tickets/[id] - Update ticket ==========
 export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
   try {
     const ticketId = parseInt((req as any).nextUrl?.pathname?.split('/').pop() ?? '', 10);
@@ -107,7 +111,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
 
     const updateData = validation.data!;
 
-    // Prevent updates to cancelled or boarded tickets (except status changes)
     if (existing.status === 'Cancelled' && Object.keys(updateData).some((key) => key !== 'status')) {
       return errorResponse('Cannot update cancelled ticket (except status)', 400);
     }
@@ -115,7 +118,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
       return errorResponse('Cannot update boarded ticket (except status)', 400);
     }
 
-    // If seat number is being changed, check if new seat is available
     if (updateData.seat_number && updateData.seat_number !== existing.seat_number) {
       const seatTaken = await queryOne(
         `SELECT ticket_id FROM Tickets 
@@ -129,7 +131,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
       if (seatTaken) return errorResponse('New seat is already taken', 409);
     }
 
-    // If seat class is being changed, check availability (same as your logic, just fixed)
     if (updateData.seat_class && updateData.seat_class !== existing.seat_class) {
       const aircraft = await queryOne<any>(
         `SELECT a.economy_seats, a.business_seats, a.first_class_seats 
@@ -164,7 +165,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
       }
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -224,7 +224,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
   }
 });
 
-// ========== DELETE /api/tickets/[id] - Cancel ticket (soft cancel) ==========
 export const DELETE = requireAuth(async (req: AuthenticatedRequest) => {
   try {
     const ticketId = parseInt((req as any).nextUrl?.pathname?.split('/').pop() ?? '', 10);
@@ -261,8 +260,6 @@ export const DELETE = requireAuth(async (req: AuthenticatedRequest) => {
         ['Cancelled', ticketId]
       );
 
-      // Optional: keep your related updates, but make them transactional too
-      // (Only if these tables exist in your DB)
       try {
         await conn.execute(
           'UPDATE Baggage SET status = ? WHERE ticket_id = ?',

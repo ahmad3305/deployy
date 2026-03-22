@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { crewRequirementUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/crew-requirements/[id] - Get single crew requirement ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -59,7 +64,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/crew-requirements/[id] - Update crew requirement ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -71,7 +75,6 @@ export async function PUT(
       return errorResponse('Invalid requirement ID', 400);
     }
 
-    // Check if requirement exists
     const existing = await queryOne<any>(
       `SELECT cr.*, fs.flight_status 
        FROM Crew_requirements cr
@@ -84,14 +87,12 @@ export async function PUT(
       return notFoundResponse('Crew requirement not found');
     }
 
-    // Prevent updates for completed flights
     if (existing.flight_status === 'Completed') {
       return errorResponse('Cannot update crew requirements for completed flight', 400);
     }
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(crewRequirementUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -99,7 +100,6 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Check if role is being changed and if it conflicts with existing requirements
     if (updateData.role_required && updateData.role_required !== existing.role_required) {
       const roleExists = await queryOne(
         'SELECT requirement_id FROM Crew_requirements WHERE flight_schedule_id = ? AND role_required = ? AND requirement_id != ?',
@@ -111,12 +111,10 @@ export async function PUT(
       }
     }
 
-    // Validate number required if being updated
     if (updateData.number_required !== undefined && updateData.number_required <= 0) {
       return errorResponse('Number required must be greater than 0', 400);
     }
 
-    // Check if reducing number_required would leave assigned crew without requirement
     if (updateData.number_required !== undefined && updateData.number_required < existing.number_required) {
       const assignedCount = await queryOne<any>(
         `SELECT COUNT(DISTINCT ta.staff_id) as count 
@@ -137,7 +135,6 @@ export async function PUT(
       }
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -161,7 +158,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated requirement with joined data
     const updatedRequirement = await queryOne(
       `SELECT 
         cr.*,
@@ -194,7 +190,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/crew-requirements/[id] - Delete crew requirement ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -206,7 +201,6 @@ export async function DELETE(
       return errorResponse('Invalid requirement ID', 400);
     }
 
-    // Check if requirement exists
     const existing = await queryOne<any>(
       `SELECT cr.*, fs.flight_status 
        FROM Crew_requirements cr
@@ -219,12 +213,10 @@ export async function DELETE(
       return notFoundResponse('Crew requirement not found');
     }
 
-    // Prevent deletion for completed flights
     if (existing.flight_status === 'Completed') {
       return errorResponse('Cannot delete crew requirements for completed flight', 400);
     }
 
-    // Check if any crew is assigned for this role
     const hasAssignments = await queryOne<any>(
       `SELECT COUNT(DISTINCT ta.staff_id) as count 
        FROM Task_Assignments ta
@@ -243,7 +235,6 @@ export async function DELETE(
       );
     }
 
-    // Delete requirement
     await query('DELETE FROM Crew_requirements WHERE requirement_id = ?', [requirementId]);
 
     return noContentResponse();

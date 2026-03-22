@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { crewRequirementCreateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/crew-requirements - Get all crew requirements ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -40,13 +45,11 @@ export async function GET(request: NextRequest) {
     `;
     const params: any[] = [];
 
-    // Filter by flight schedule
     if (flight_schedule_id) {
       sql += ' AND cr.flight_schedule_id = ?';
       params.push(parseInt(flight_schedule_id));
     }
 
-    // Filter by role
     if (role_required) {
       sql += ' AND cr.role_required = ?';
       params.push(role_required);
@@ -63,12 +66,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ========== POST /api/crew-requirements - Create new crew requirement ==========
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(crewRequirementCreateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -76,7 +77,6 @@ export async function POST(request: NextRequest) {
 
     const data = validation.data!;
 
-    // Verify flight schedule exists
     const schedule = await queryOne<any>(
       'SELECT * FROM Flight_schedules WHERE flight_schedule_id = ?',
       [data.flight_schedule_id]
@@ -86,7 +86,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Flight schedule not found', 404);
     }
 
-    // Check if flight is cancelled or completed
     if (schedule.flight_status === 'Cancelled') {
       return errorResponse('Cannot add crew requirements to cancelled flight', 400);
     }
@@ -95,7 +94,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Cannot add crew requirements to completed flight', 400);
     }
 
-    // Check if requirement for this role already exists for this flight
     const existingRequirement = await queryOne(
       'SELECT requirement_id FROM Crew_requirements WHERE flight_schedule_id = ? AND role_required = ?',
       [data.flight_schedule_id, data.role_required]
@@ -105,12 +103,10 @@ export async function POST(request: NextRequest) {
       return errorResponse('Crew requirement for this role already exists for this flight', 409);
     }
 
-    // Validate number required
     if (data.number_required <= 0) {
       return errorResponse('Number required must be greater than 0', 400);
     }
 
-    // Insert crew requirement
     const result = await query<any>(
       `INSERT INTO Crew_requirements (
         flight_schedule_id, role_required, number_required
@@ -122,7 +118,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Fetch created requirement with joined data
     const newRequirement = await queryOne(
       `SELECT 
         cr.*,

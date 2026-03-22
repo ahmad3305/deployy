@@ -12,9 +12,14 @@ import {
 } from '@/lib/response';
 import { privateAircraftUpdateSchema, validateData } from '@/lib/validations';
 
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 type Ctx = { params: { id: string } };
 
-// ---- GET ----
 const getHandler = (ctx: Ctx) =>
   async (req: AuthenticatedRequest) => {
     try {
@@ -57,7 +62,6 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   return requireAuth(getHandler(ctx))(req as any);
 }
 
-// ---- PUT ----
 const putHandler = (ctx: Ctx) =>
   async (req: AuthenticatedRequest) => {
     try {
@@ -166,7 +170,6 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
   return requireAuth(putHandler(ctx))(req as any);
 }
 
-// ---- DELETE ----
 const deleteHandler = (ctx: Ctx) =>
   async (req: AuthenticatedRequest) => {
     try {

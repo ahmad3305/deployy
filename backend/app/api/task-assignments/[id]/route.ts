@@ -6,6 +6,12 @@ import { successResponse, errorResponse, notFoundResponse, noContentResponse, va
 import { taskUpdateSchema, validateData } from '@/lib/validations';
 import { verifyToken } from '@/lib/auth';
 
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

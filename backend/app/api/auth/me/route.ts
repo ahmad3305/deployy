@@ -5,6 +5,12 @@ import { requireAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
 import { successResponse, errorResponse } from '@/lib/response';
 import { queryOne } from '@/lib/db';
 
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 async function handler(req: AuthenticatedRequest) {
   try {
     const user = req.user!;

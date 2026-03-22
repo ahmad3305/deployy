@@ -6,13 +6,17 @@ import { successResponse, errorResponse, notFoundResponse, noContentResponse, va
 import { staffUpdateSchema, validateData } from '@/lib/validations';
 import { verifyToken } from '@/lib/auth';
 
-// ========== GET /api/staff/[id] - Get single staff (Staff+) ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Auth check
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return errorResponse('Authentication required', 401);
@@ -29,7 +33,6 @@ export async function GET(
       return errorResponse('Access denied. Staff or Admin role required.', 403);
     }
 
-    // Main logic
     const staffId = parseInt(params.id);
 
     if (isNaN(staffId)) {
@@ -61,13 +64,11 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/staff/[id] - Update staff (Admin only) ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Auth check
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return errorResponse('Authentication required', 401);
@@ -84,7 +85,6 @@ export async function PUT(
       return errorResponse('Access denied. Admin role required.', 403);
     }
 
-    // Main logic
     const staffId = parseInt(params.id);
 
     if (isNaN(staffId)) {
@@ -160,13 +160,11 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/staff/[id] - Delete staff (Admin only) ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Auth check
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return errorResponse('Authentication required', 401);
@@ -183,7 +181,6 @@ export async function DELETE(
       return errorResponse('Access denied. Admin role required.', 403);
     }
 
-    // Main logic
     const staffId = parseInt(params.id);
 
     if (isNaN(staffId)) {

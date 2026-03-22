@@ -6,13 +6,17 @@ import { successResponse, errorResponse, notFoundResponse, noContentResponse, va
 import { taskUpdateSchema, validateData } from '@/lib/validations';
 import { verifyToken } from '@/lib/auth';
 
-// ========== GET /api/tasks/[id] - Get single task ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Auth check
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return errorResponse('Authentication required', 401);
@@ -69,13 +73,11 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/tasks/[id] - Update task ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Auth check
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return errorResponse('Authentication required', 401);
@@ -92,7 +94,6 @@ export async function PUT(
       return errorResponse('Access denied. Staff or Admin role required.', 403);
     }
 
-    // Main logic
     const taskId = parseInt(params.id);
 
     if (isNaN(taskId)) {
@@ -145,7 +146,6 @@ export async function PUT(
       return errorResponse('No fields to update', 400);
     }
 
-    // Validate time if both provided
     if (updateData.start_time && updateData.end_time) {
       const startTime = new Date(updateData.start_time);
       const endTime = new Date(updateData.end_time);
@@ -173,13 +173,11 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/tasks/[id] - Delete task (Admin only) ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Auth check
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return errorResponse('Authentication required', 401);
@@ -212,7 +210,6 @@ export async function DELETE(
       return notFoundResponse('Task not found');
     }
 
-    // Check if there are assignments
     const assignments = await queryOne(
       'SELECT COUNT(*) as count FROM Task_Assignments WHERE task_id = ?',
       [taskId]

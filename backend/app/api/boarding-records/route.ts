@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { boardingRecordCreateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/boarding-records - Get all boarding records ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -52,37 +57,31 @@ export async function GET(request: NextRequest) {
     `;
     const params: any[] = [];
 
-    // Filter by ticket
     if (ticket_id) {
       sql += ' AND br.ticket_id = ?';
       params.push(parseInt(ticket_id));
     }
 
-    // Filter by gate
     if (gate_id) {
       sql += ' AND br.gate_id = ?';
       params.push(parseInt(gate_id));
     }
 
-    // Filter by passenger
     if (passenger_id) {
       sql += ' AND p.passenger_id = ?';
       params.push(parseInt(passenger_id));
     }
 
-    // Filter by flight schedule
     if (flight_schedule_id) {
       sql += ' AND fs.flight_schedule_id = ?';
       params.push(parseInt(flight_schedule_id));
     }
 
-    // Filter by boarding status
     if (boarding_status) {
       sql += ' AND br.boarding_status = ?';
       params.push(boarding_status);
     }
 
-    // Filter by boarding date
     if (boarding_date) {
       sql += ' AND DATE(br.boarding_time) = ?';
       params.push(boarding_date);
@@ -99,12 +98,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ========== POST /api/boarding-records - Create new boarding record ==========
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(boardingRecordCreateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -112,7 +109,6 @@ export async function POST(request: NextRequest) {
 
     const data = validation.data!;
 
-    // Verify ticket exists
     const ticket = await queryOne<any>(
       `SELECT t.*, fs.flight_schedule_id, fs.gate_id as scheduled_gate_id, fs.departure_datetime, fs.flight_status
        FROM Tickets t
@@ -125,7 +121,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Ticket not found', 404);
     }
 
-    // Check if ticket is valid for boarding
     if (ticket.status === 'Cancelled') {
       return errorResponse('Cannot board with cancelled ticket', 400);
     }
@@ -134,7 +129,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Ticket has already been boarded', 409);
     }
 
-    // Check flight status
     if (ticket.flight_status === 'Cancelled') {
       return errorResponse('Cannot board cancelled flight', 400);
     }
@@ -143,7 +137,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Cannot board completed flight', 400);
     }
 
-    // Verify gate exists
     const gate = await queryOne<any>(
       'SELECT * FROM Gates WHERE gate_id = ?',
       [data.gate_id]
@@ -153,17 +146,14 @@ export async function POST(request: NextRequest) {
       return errorResponse('Gate not found', 404);
     }
 
-    // Check if gate matches flight schedule (optional warning, not blocking)
     if (ticket.scheduled_gate_id && ticket.scheduled_gate_id !== data.gate_id) {
       console.warn(`Warning: Gate mismatch. Ticket scheduled for gate ${ticket.scheduled_gate_id}, boarding at gate ${data.gate_id}`);
     }
 
-    // Check if gate is available (note: schema uses 'active' or 'maintenance', not 'Available')
     if (gate.status === 'maintenance') {
       return errorResponse('Gate is under maintenance and not available for boarding', 400);
     }
 
-    // Check if boarding record already exists for this ticket
     const existingRecord = await queryOne(
       'SELECT boarding_id FROM Boarding_records WHERE ticket_id = ?',
       [data.ticket_id]
@@ -173,7 +163,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Boarding record already exists for this ticket', 409);
     }
 
-    // Validate boarding time
     const boardingTime = new Date(data.boarding_time);
     const departureTime = new Date(ticket.departure_datetime);
 
@@ -181,7 +170,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Boarding time cannot be after departure time', 400);
     }
 
-    // Insert boarding record
     const result = await query<any>(
       `INSERT INTO Boarding_records (
         ticket_id, flight_schedule_id, gate_id, boarding_time, boarding_status
@@ -195,7 +183,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Update ticket status to Boarded if boarding status is Boarded
     if (data.boarding_status === 'Boarded') {
       await query(
         'UPDATE Tickets SET status = ? WHERE ticket_id = ?',
@@ -203,7 +190,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch created boarding record with joined data
     const newRecord = await queryOne(
       `SELECT 
         br.*,

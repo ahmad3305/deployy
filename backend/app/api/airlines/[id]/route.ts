@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { airlineUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/airlines/[id] - Get single airline ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -31,7 +36,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/airlines/[id] - Update airline ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -43,7 +47,6 @@ export async function PUT(
       return errorResponse('Invalid airline ID', 400);
     }
 
-    // Check if airline exists
     const existing = await queryOne(
       'SELECT * FROM Airline WHERE airline_id = ?',
       [airlineId]
@@ -55,7 +58,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(airlineUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -63,7 +65,6 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Check if airline_code is being changed and if it's unique
     if (updateData.airline_code && updateData.airline_code !== (existing as any).airline_code) {
       const codeExists = await queryOne(
         'SELECT airline_id FROM Airline WHERE airline_code = ? AND airline_id != ?',
@@ -75,7 +76,6 @@ export async function PUT(
       }
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -103,7 +103,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated airline
     const updatedAirline = await queryOne(
       'SELECT * FROM Airline WHERE airline_id = ?',
       [airlineId]
@@ -116,7 +115,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/airlines/[id] - Delete airline ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -128,7 +126,6 @@ export async function DELETE(
       return errorResponse('Invalid airline ID', 400);
     }
 
-    // Check if airline exists
     const existing = await queryOne(
       'SELECT * FROM Airline WHERE airline_id = ?',
       [airlineId]
@@ -138,7 +135,6 @@ export async function DELETE(
       return notFoundResponse('Airline not found');
     }
 
-    // Check if airline has flights (foreign key constraint)
     const hasFlights = await queryOne(
       'SELECT COUNT(*) as count FROM Flights WHERE airline_id = ?',
       [airlineId]
@@ -148,7 +144,6 @@ export async function DELETE(
       return errorResponse('Cannot delete airline with existing flights', 409);
     }
 
-    // Check if airline has aircraft
     const hasAircraft = await queryOne(
       'SELECT COUNT(*) as count FROM Aircraft WHERE airline_id = ?',
       [airlineId]
@@ -158,7 +153,6 @@ export async function DELETE(
       return errorResponse('Cannot delete airline with existing aircraft', 409);
     }
 
-    // Delete airline
     await query('DELETE FROM Airline WHERE airline_id = ?', [airlineId]);
 
     return noContentResponse();

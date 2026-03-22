@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { cargoCreateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/cargo - Get all cargo ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -37,37 +42,31 @@ export async function GET(request: NextRequest) {
     `;
     const params: any[] = [];
 
-    // Filter by flight
     if (flight_id) {
       sql += ' AND c.flight_id = ?';
       params.push(parseInt(flight_id));
     }
 
-    // Filter by origin airport
     if (origin_airport_id) {
       sql += ' AND c.origin_airport_id = ?';
       params.push(parseInt(origin_airport_id));
     }
 
-    // Filter by destination airport
     if (destination_airport_id) {
       sql += ' AND c.destination_airport_id = ?';
       params.push(parseInt(destination_airport_id));
     }
 
-    // Filter by status
     if (status) {
       sql += ' AND c.status = ?';
       params.push(status);
     }
 
-    // Filter by tracking number
     if (tracking_number) {
       sql += ' AND c.tracking_number = ?';
       params.push(tracking_number);
     }
 
-    // Filter by cargo type
     if (cargo_type) {
       sql += ' AND c.cargo_type = ?';
       params.push(cargo_type);
@@ -84,12 +83,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ========== POST /api/cargo - Create new cargo shipment ==========
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(cargoCreateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -97,7 +94,6 @@ export async function POST(request: NextRequest) {
 
     const data = validation.data!;
 
-    // Verify flight exists
     const flight = await queryOne(
       'SELECT * FROM Flights WHERE flight_id = ?',
       [data.flight_id]
@@ -107,7 +103,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Flight not found', 404);
     }
 
-    // Verify origin airport exists
     const originAirport = await queryOne(
       'SELECT airport_id FROM Airport WHERE airport_id = ?',
       [data.origin_airport_id]
@@ -117,7 +112,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Origin airport not found', 404);
     }
 
-    // Verify destination airport exists
     const destAirport = await queryOne(
       'SELECT airport_id FROM Airport WHERE airport_id = ?',
       [data.destination_airport_id]
@@ -127,17 +121,14 @@ export async function POST(request: NextRequest) {
       return errorResponse('Destination airport not found', 404);
     }
 
-    // Ensure origin and destination are different
     if (data.origin_airport_id === data.destination_airport_id) {
       return errorResponse('Origin and destination airports must be different', 400);
     }
 
-    // Validate weight
     if (data.weight_kg <= 0) {
       return errorResponse('Weight must be greater than 0', 400);
     }
 
-    // Check if tracking number already exists
     const existingTracking = await queryOne(
       'SELECT cargo_id FROM Cargo WHERE tracking_number = ?',
       [data.tracking_number]
@@ -147,7 +138,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Tracking number already exists', 409);
     }
 
-    // Insert cargo
     const result = await query<any>(
       `INSERT INTO Cargo (
         flight_id, tracking_number, cargo_type, description, weight_kg,
@@ -171,7 +161,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Fetch created cargo with joined data
     const newCargo = await queryOne(
       `SELECT 
         c.*,

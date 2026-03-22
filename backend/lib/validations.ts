@@ -47,6 +47,19 @@ export const aircraftCreateSchema = z.object({
   current_airport: z.number().int().positive(),
 });
 
+
+export const airlineCreateSchema = z.object({
+  airline_name: z.string().min(2).max(100),
+  country: z.string().min(2).max(100),
+  airline_code: z.string().toUpperCase().min(2).max(10),
+});
+
+export const airlineUpdateSchema = z.object({
+  airline_name: z.string().min(2).max(100).optional(),
+  country: z.string().min(2).max(100).optional(),
+  airline_code: z.string().toUpperCase().min(2).max(10).optional(),
+});
+
 export const aircraftUpdateSchema = aircraftCreateSchema.partial();
 
 // ========== Flight Validations ==========
@@ -129,6 +142,22 @@ export const cargoUpdateSchema = cargoCreateSchema.partial();
 export const paymentCheckoutSchema = z.object({
   ticket_id: z.number().int().positive(),
   payment_method: z.enum(['Credit Card', 'Cash', 'Online Transfer']),
+});
+
+export const paymentCreateSchema = z.object({
+  ticket_id: z.number().int().positive().optional(), 
+  cargo_id: z.number().int().positive().optional(),
+  amount: z.union([z.number().positive(), z.string().regex(/^\d+(\.\d{1,2})?$/)]), 
+  payment_method: z.enum(['Credit Card', 'Cash', 'Online Transfer']),
+  payment_status: z.enum(['Pending', 'Completed', 'Failed']).optional(), 
+});
+
+export const paymentUpdateSchema = z.object({
+  ticket_id: z.number().int().positive().optional(),
+  cargo_id: z.number().int().positive().optional(),
+  amount: z.union([z.number().positive(), z.string().regex(/^\d+(\.\d{1,2})?$/)]).optional(),
+  payment_method: z.enum(['Credit Card', 'Cash', 'Online Transfer']).optional(),
+  payment_status: z.enum(['Pending', 'Completed', 'Failed']).optional(),
 });
 
 // ========== Staff Validations ==========

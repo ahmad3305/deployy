@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { gateUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/gates/[id] - Get single gate ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -48,7 +53,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/gates/[id] - Update gate ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -60,7 +64,6 @@ export async function PUT(
       return errorResponse('Invalid gate ID', 400);
     }
 
-    // Check if gate exists
     const existing = await queryOne<any>(
       'SELECT * FROM Gates WHERE gate_id = ?',
       [gateId]
@@ -72,7 +75,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(gateUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -80,7 +82,6 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Check if gate number is being changed and if it's unique in this terminal
     if (updateData.gate_number && updateData.gate_number !== existing.gate_number) {
       const gateExists = await queryOne(
         'SELECT gate_id FROM Gates WHERE terminal_id = ? AND gate_number = ? AND gate_id != ?',
@@ -92,7 +93,6 @@ export async function PUT(
       }
     }
 
-    // If changing status to Maintenance or Closed, check if gate has active flights
     if (updateData.status && updateData.status !== 'Available' && existing.status === 'Available') {
       const activeFlights = await queryOne<any>(
         `SELECT COUNT(*) as count FROM Flight_schedules
@@ -110,7 +110,6 @@ export async function PUT(
       }
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -134,7 +133,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated gate with joined data
     const updatedGate = await queryOne(
       `SELECT 
         g.*,
@@ -156,7 +154,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/gates/[id] - Delete gate ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -168,7 +165,6 @@ export async function DELETE(
       return errorResponse('Invalid gate ID', 400);
     }
 
-    // Check if gate exists
     const existing = await queryOne(
       'SELECT * FROM Gates WHERE gate_id = ?',
       [gateId]
@@ -178,7 +174,6 @@ export async function DELETE(
       return notFoundResponse('Gate not found');
     }
 
-    // Check if gate has flight schedules
     const hasSchedules = await queryOne<any>(
       'SELECT COUNT(*) as count FROM Flight_schedulesWHERE gate_id = ?',
       [gateId]
@@ -188,7 +183,6 @@ export async function DELETE(
       return errorResponse('Cannot delete gate with existing flight schedules', 409);
     }
 
-    // Check if gate has boarding records
     const hasBoardingRecords = await queryOne<any>(
       'SELECT COUNT(*) as count FROM Boarding_records WHERE gate_id = ?',
       [gateId]
@@ -198,7 +192,6 @@ export async function DELETE(
       return errorResponse('Cannot delete gate with existing boarding records', 409);
     }
 
-    // Delete gate
     await query('DELETE FROM Gates WHERE gate_id = ?', [gateId]);
 
     return noContentResponse();

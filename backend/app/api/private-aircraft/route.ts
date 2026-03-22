@@ -10,7 +10,12 @@ import {
 } from '@/lib/response';
 import { privateAircraftCreateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/private-aircraft - List my private aircraft ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 async function getHandler(req: AuthenticatedRequest) {
   try {
     const user = req.user!;
@@ -42,7 +47,6 @@ async function getHandler(req: AuthenticatedRequest) {
 
 export const GET = requireAuth(getHandler);
 
-// ========== POST /api/private-aircraft - Create private aircraft ==========
 async function postHandler(req: AuthenticatedRequest) {
   try {
     const user = req.user!;
@@ -55,7 +59,6 @@ async function postHandler(req: AuthenticatedRequest) {
 
     const data = validation.data!;
 
-    // prevent duplicates by registration_number (DB should also have UNIQUE)
     const existing = await queryOne(
       `SELECT private_aircraft_id FROM private_aircraft WHERE registration_number = ?`,
       [data.registration_number]

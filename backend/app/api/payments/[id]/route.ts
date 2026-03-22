@@ -12,7 +12,12 @@ import {
 import { paymentUpdateSchema, validateData } from '@/lib/validations';
 import { requireAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
 
-// Helpers
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 function isPrivileged(user: AuthenticatedRequest['user']) {
   return user?.role === 'Admin' || user?.role === 'Staff';
 }
@@ -21,7 +26,6 @@ async function canAccessPayment(user: AuthenticatedRequest['user'], paymentId: n
   if (!user) return false;
   if (isPrivileged(user)) return true;
 
-  // Customer: only if payment belongs to their passenger (through ticket)
   if (user.role === 'Customer') {
     if (!user.passenger_id) return false;
 
@@ -40,7 +44,6 @@ async function canAccessPayment(user: AuthenticatedRequest['user'], paymentId: n
   return false;
 }
 
-// ========== GET /api/payments/[id] - Get single payment ==========
 async function getHandler(req: AuthenticatedRequest, paymentId: number) {
   const user = req.user!;
 
@@ -48,8 +51,7 @@ async function getHandler(req: AuthenticatedRequest, paymentId: number) {
     return { kind: 'forbidden' as const };
   }
 
-  // FIXES:
-  // - Flight_Schedule -> Flight_schedules
+ 
   const payment = await queryOne<any>(
     `SELECT 
       pay.*,
@@ -119,16 +121,12 @@ export const GET = requireAuth(async (req: AuthenticatedRequest) => {
   }
 });
 
-// ========== PUT /api/payments/[id] - Update payment ==========
 export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
   try {
     const user = req.user!;
     const paymentId = parseInt((req as any).nextUrl?.pathname?.split('/').pop() ?? '', 10);
     if (Number.isNaN(paymentId)) return errorResponse('Invalid payment ID', 400);
 
-    // RBAC:
-    // - Admin/Staff can update (e.g. mark failed/refund)
-    // - Customer cannot update payments
     if (!isPrivileged(user)) {
       return errorResponse('Access denied', 403);
     }
@@ -141,7 +139,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
     const updateData = validation.data!;
 
     const result = await withTransaction(async (conn) => {
-      // Lock payment row
       const [payRows] = await conn.execute(
         `SELECT payment_id, ticket_id, cargo_id, payment_status, amount, payment_method
          FROM Payments
@@ -153,7 +150,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
       const existing = (payRows as any[])[0];
       if (!existing) return { kind: 'not_found' as const };
 
-      // Prevent updates to completed payments (except status changes to Failed)
       if (existing.payment_status === 'Completed') {
         if (updateData.payment_status && updateData.payment_status !== 'Failed') {
           return {
@@ -171,7 +167,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
         }
       }
 
-      // Validate amount
       if (updateData.amount !== undefined) {
         const amt = Number(updateData.amount);
         if (!Number.isFinite(amt) || amt <= 0) {
@@ -179,8 +174,7 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
         }
       }
 
-      // If changing status to Failed from Completed => refund-like logic
-      // (Keep your behavior, but make it atomic)
+      
       if (updateData.payment_status === 'Failed' && existing.payment_status === 'Completed') {
         if (existing.ticket_id) {
           const [ticketRows] = await conn.execute(
@@ -196,7 +190,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
             return { kind: 'error' as const, status: 400, message: 'Cannot refund payment for boarded ticket' };
           }
 
-          // Update ticket status to Cancelled
           await conn.execute('UPDATE Tickets SET status = ? WHERE ticket_id = ?', [
             'Cancelled',
             existing.ticket_id,
@@ -216,17 +209,14 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
           if (cargo && cargo.status === 'Delivered') {
             return { kind: 'error' as const, status: 400, message: 'Cannot refund payment for delivered cargo' };
           }
-          // No cargo status change here unless you want one (left as-is)
         }
       }
 
-      // If changing status to Completed from non-completed => confirm related entities
       if (updateData.payment_status === 'Completed' && existing.payment_status !== 'Completed') {
         if (existing.ticket_id) {
           await conn.execute('UPDATE Tickets SET status = ? WHERE ticket_id = ?', ['Confirmed', existing.ticket_id]);
         }
         if (existing.cargo_id) {
-          // Your original condition was odd (status = 'Booked' AND status = 'Booked'); leaving a sane version:
           await conn.execute(
             'UPDATE Cargo SET status = ? WHERE cargo_id = ? AND status = ?',
             ['Booked', existing.cargo_id, 'Booked']
@@ -234,7 +224,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
         }
       }
 
-      // Build update query
       const updates: string[] = [];
       const values: any[] = [];
 
@@ -259,7 +248,6 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
 
       await conn.execute(`UPDATE Payments SET ${updates.join(', ')} WHERE payment_id = ?`, values);
 
-      // Fetch updated payment (simpler view)
       const [updatedRows] = await conn.execute(
         `SELECT 
           pay.*,
@@ -300,14 +288,12 @@ export const PUT = requireAuth(async (req: AuthenticatedRequest) => {
   }
 });
 
-// ========== DELETE /api/payments/[id] - Delete/Refund payment ==========
 export const DELETE = requireAuth(async (req: AuthenticatedRequest) => {
   try {
     const user = req.user!;
     const paymentId = parseInt((req as any).nextUrl?.pathname?.split('/').pop() ?? '', 10);
     if (Number.isNaN(paymentId)) return errorResponse('Invalid payment ID', 400);
 
-    // Only Staff/Admin can delete payments
     if (!isPrivileged(user)) {
       return errorResponse('Access denied', 403);
     }
@@ -324,7 +310,6 @@ export const DELETE = requireAuth(async (req: AuthenticatedRequest) => {
       const existing = (rows as any[])[0];
       if (!existing) return { kind: 'not_found' as const };
 
-      // Only allow deletion of Pending or Failed payments
       if (existing.payment_status === 'Completed') {
         return {
           kind: 'error' as const,

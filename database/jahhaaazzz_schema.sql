@@ -590,3 +590,16 @@ INSERT INTO Users (email, password_hash, role) VALUES
 ('staff@airport.com', '$2b$10$YRkj9YRJyv5PZQ3h5xKzH.P5fJ3mK8lN7rX2vZ9jW4qT5uL6mN8pP', 'Staff'),
 ('customer@airport.com', '$2b$10$ZRkj9YRJyv5PZQ3h5xKzH.P5fJ3mK8lN7rX2vZ9jW4qT5uL6mN8pQ', 'Customer');
 
+
+
+
+
+
+
+ALTER TABLE Payments
+  MODIFY payment_method ENUM('Credit Card','Cash','Online Transfer') NULL,
+  MODIFY payment_date TIMESTAMP NULL DEFAULT NULL;
+
+ALTER TABLE Payments
+  ADD UNIQUE KEY uniq_payments_ticket_id (ticket_id);
+

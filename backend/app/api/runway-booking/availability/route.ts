@@ -5,7 +5,12 @@ import { query } from '@/lib/db';
 import { successResponse, errorResponse, validationErrorResponse } from '@/lib/response';
 import { runwayAvailabilitySchema, validateData } from '@/lib/validations';
 
-// GET /api/runway-bookings/availability?airport_id=1&booking_date=YYYY-MM-DD&start_time=HH:MM:SS&end_time=HH:MM:SS
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -30,7 +35,6 @@ export async function GET(request: NextRequest) {
       return errorResponse('start_time must be before end_time', 400);
     }
 
-    // Overlap: newStart < existingEnd AND newEnd > existingStart
     const availableRunways = await query(
       `
       SELECT

@@ -3,6 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { aircraftTypeCreateSchema, aircraftTypeUpdateSchema, validateData } from '@/lib/validations';
 
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 // ========== GET /api/aircraft-types - Get all aircraft types ==========
 export async function GET(request: NextRequest) {
   try {

@@ -5,10 +5,14 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse } from '@/lib/response';
 import { verifyToken } from '@/lib/auth';
 
-// ========== POST /api/flight-consolidation/check ==========
-// Check if a flight can be consolidated
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
+
 export async function POST(request: NextRequest) {
-  // Admin only
   const token = request.headers.get('authorization')?.substring(7);
   const user = verifyToken(token!);
   
@@ -24,7 +28,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('flight_schedule_id is required', 400);
     }
 
-    // 1. Get flight details
     const flightSchedule = await queryOne<any>(
       `SELECT 
         fs.*,
@@ -52,7 +55,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Flight schedule not found', 404);
     }
 
-    // 2. Check if flight is already cancelled or completed
     if (flightSchedule.flight_status === 'Cancelled') {
       return successResponse({
         canConsolidate: false,
@@ -67,7 +69,6 @@ export async function POST(request: NextRequest) {
       }, 'Consolidation check completed');
     }
 
-    // 3. Count current passengers
     const passengerCount = await queryOne<any>(
       `SELECT COUNT(*) as count 
        FROM Tickets 
@@ -78,7 +79,6 @@ export async function POST(request: NextRequest) {
 
     const currentPassengers = passengerCount?.count || 0;
 
-    // 4. Check if passengers < 50
     if (currentPassengers >= 50) {
       return successResponse({
         canConsolidate: false,
@@ -87,7 +87,6 @@ export async function POST(request: NextRequest) {
       }, 'Consolidation check completed');
     }
 
-    // 5. Find candidate flights within 24-36 hours to same destination
     const candidateFlights = await query<any>(
       `SELECT 
         fs.flight_schedule_id,
@@ -126,7 +125,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // 6. Determine if consolidation is possible
     const canConsolidate = candidateFlights.length > 0;
 
     if (canConsolidate) {

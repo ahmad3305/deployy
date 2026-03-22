@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { boardingRecordUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/boarding-records/[id] - Get single boarding record ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -76,7 +81,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/boarding-records/[id] - Update boarding record ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -88,7 +92,6 @@ export async function PUT(
       return errorResponse('Invalid boarding record ID', 400);
     }
 
-    // Check if boarding record exists
     const existing = await queryOne<any>(
       `SELECT br.*, t.ticket_id, t.flight_schedule_id, fs.departure_datetime, fs.flight_status, t.status as ticket_status
        FROM Boarding_records br
@@ -104,7 +107,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(boardingRecordUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -112,17 +114,14 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Prevent updates to denied boarding records (except status recovery)
     if (existing.boarding_status === 'Denied' && updateData.boarding_status !== 'Boarded') {
       return errorResponse('Cannot update denied boarding record (except to change status)', 400);
     }
 
-    // Prevent updates to completed flights
     if (existing.flight_status === 'Completed') {
       return errorResponse('Cannot update boarding record for completed flight', 400);
     }
 
-    // Verify new gate if being updated
     if (updateData.gate_id) {
       const gate = await queryOne<any>(
         'SELECT * FROM Gates WHERE gate_id = ?',
@@ -138,7 +137,6 @@ export async function PUT(
       }
     }
 
-    // Validate boarding time if being updated
     if (updateData.boarding_time) {
       const newBoardingTime = new Date(updateData.boarding_time);
       const departureTime = new Date(existing.departure_datetime);
@@ -148,9 +146,7 @@ export async function PUT(
       }
     }
 
-    // Handle status changes
     if (updateData.boarding_status) {
-      // If changing to Boarded, update ticket status
       if (updateData.boarding_status === 'Boarded' && existing.boarding_status !== 'Boarded') {
         await query(
           'UPDATE Tickets SET status = ? WHERE ticket_id = ?',
@@ -158,7 +154,6 @@ export async function PUT(
         );
       }
 
-      // If changing from Boarded to Denied, revert ticket status
       if (updateData.boarding_status === 'Denied' && existing.boarding_status === 'Boarded') {
         await query(
           'UPDATE Tickets SET status = ? WHERE ticket_id = ?',
@@ -166,11 +161,10 @@ export async function PUT(
         );
       }
 
-      // Status transition validation
       const validTransitions: Record<string, string[]> = {
         'Pending': ['Boarded', 'Denied'],
-        'Boarded': ['Denied'], // Can deny after boarding (edge case)
-        'Denied': ['Boarded', 'Pending'], // Can recover denied boarding
+        'Boarded': ['Denied'],
+        'Denied': ['Boarded', 'Pending'], 
       };
 
       const allowedStatuses = validTransitions[existing.boarding_status] || [];
@@ -182,7 +176,6 @@ export async function PUT(
       }
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -210,7 +203,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated boarding record with joined data
     const updatedRecord = await queryOne(
       `SELECT 
         br.*,
@@ -244,7 +236,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/boarding-records/[id] - Delete boarding record ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -256,7 +247,6 @@ export async function DELETE(
       return errorResponse('Invalid boarding record ID', 400);
     }
 
-    // Check if boarding record exists
     const existing = await queryOne<any>(
       `SELECT br.*, t.ticket_id, fs.flight_status
        FROM Boarding_records br
@@ -270,12 +260,10 @@ export async function DELETE(
       return notFoundResponse('Boarding record not found');
     }
 
-    // Prevent deletion if flight is completed
     if (existing.flight_status === 'Completed') {
       return errorResponse('Cannot delete boarding record for completed flight', 400);
     }
 
-    // If boarding was completed, revert ticket status
     if (existing.boarding_status === 'Boarded') {
       await query(
         'UPDATE Tickets SET status = ? WHERE ticket_id = ?',
@@ -283,7 +271,6 @@ export async function DELETE(
       );
     }
 
-    // Delete boarding record
     await query('DELETE FROM Boarding_records WHERE boarding_id = ?', [boardingId]);
 
     return noContentResponse();

@@ -1,14 +1,27 @@
 export const runtime = 'nodejs';
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, withTransaction } from '@/lib/db';
 import { hashPassword, generateToken } from '@/lib/auth';
 import { createdResponse, errorResponse } from '@/lib/response';
 
+const allowedOrigin = 'http://localhost:3001'; 
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': allowedOrigin,
+      'Access-Control-Allow-Methods': 'POST,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-
     const {
       email,
       password,
@@ -27,38 +40,38 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!email || !password) {
-      return errorResponse('Email and password are required', 400);
+      return withCORS(errorResponse('Email and password are required', 400));
     }
 
     if (password.length < 6) {
-      return errorResponse('Password must be at least 6 characters', 400);
+      return withCORS(errorResponse('Password must be at least 6 characters', 400));
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return errorResponse('Invalid email format', 400);
+      return withCORS(errorResponse('Invalid email format', 400));
     }
 
     const existingUser = await queryOne('SELECT user_id FROM Users WHERE email = ?', [email]);
     if (existingUser) {
-      return errorResponse('User with this email already exists', 409);
+      return withCORS(errorResponse('User with this email already exists', 409));
     }
 
     const userRole = role && ['Admin', 'Staff', 'Customer'].includes(role) ? role : 'Customer';
 
     if (staff_id) {
       const staff = await queryOne('SELECT staff_id FROM Staff WHERE staff_id = ?', [staff_id]);
-      if (!staff) return errorResponse('Staff member not found', 404);
+      if (!staff) return withCORS(errorResponse('Staff member not found', 404));
     }
 
     if (userRole !== 'Customer' && passenger_id) {
       const passenger = await queryOne('SELECT passenger_id FROM Passengers WHERE passenger_id = ?', [passenger_id]);
-      if (!passenger) return errorResponse('Passenger not found', 404);
+      if (!passenger) return withCORS(errorResponse('Passenger not found', 404));
     }
 
     if (userRole === 'Customer') {
       if (passenger_id) {
-        return errorResponse('Do not provide passenger_id when registering as Customer', 400);
+        return withCORS(errorResponse('Do not provide passenger_id when registering as Customer', 400));
       }
 
       const missing: string[] = [];
@@ -71,11 +84,11 @@ export async function POST(request: NextRequest) {
       if (!contact_number) missing.push('contact_number');
 
       if (missing.length > 0) {
-        return errorResponse(`Missing required passenger fields: ${missing.join(', ')}`, 400);
+        return withCORS(errorResponse(`Missing required passenger fields: ${missing.join(', ')}`, 400));
       }
 
       if (gender !== 'male' && gender !== 'female') {
-        return errorResponse("gender must be 'male' or 'female'", 400);
+        return withCORS(errorResponse("gender must be 'male' or 'female'", 400));
       }
 
       const existingPassengerEmail = await queryOne(
@@ -83,7 +96,7 @@ export async function POST(request: NextRequest) {
         [email]
       );
       if (existingPassengerEmail) {
-        return errorResponse('Passenger with this email already exists', 409);
+        return withCORS(errorResponse('Passenger with this email already exists', 409));
       }
 
       const existingPassengerPassport = await queryOne(
@@ -91,7 +104,7 @@ export async function POST(request: NextRequest) {
         [passport_number]
       );
       if (existingPassengerPassport) {
-        return errorResponse('Passenger with this passport number already exists', 409);
+        return withCORS(errorResponse('Passenger with this passport number already exists', 409));
       }
 
       const password_hash = await hashPassword(password);
@@ -135,24 +148,25 @@ export async function POST(request: NextRequest) {
         staff_id: null,
       });
 
-      return createdResponse(
-        {
-          token,
-          user: {
-            user_id: result.newUserId,
-            email,
-            role: 'Customer',
-            passenger_id: result.newPassengerId,
-            staff_id: null,
+      return withCORS(
+        createdResponse(
+          {
+            token,
+            user: {
+              user_id: result.newUserId,
+              email,
+              role: 'Customer',
+              passenger_id: result.newPassengerId,
+              staff_id: null,
+            },
           },
-        },
-        'Registration successful'
+          'Registration successful'
+        )
       );
     }
 
-    
     if (userRole === 'Staff' || userRole === 'Admin') {
-      
+      // logic for staff/admin...
     }
 
     const password_hash = await hashPassword(password);
@@ -171,21 +185,29 @@ export async function POST(request: NextRequest) {
       staff_id: staff_id || null,
     });
 
-    return createdResponse(
-      {
-        token,
-        user: {
-          user_id: result.insertId,
-          email,
-          role: userRole,
-          passenger_id: passenger_id || null,
-          staff_id: staff_id || null,
+    return withCORS(
+      createdResponse(
+        {
+          token,
+          user: {
+            user_id: result.insertId,
+            email,
+            role: userRole,
+            passenger_id: passenger_id || null,
+            staff_id: staff_id || null,
+          },
         },
-      },
-      'Registration successful'
+        'Registration successful'
+      )
     );
   } catch (error: any) {
     console.error('Registration error:', error);
-    return errorResponse('Registration failed: ' + error.message, 500);
+    const res = errorResponse('Registration failed: ' + error.message, 500);
+    return withCORS(res);
   }
+}
+
+function withCORS(resp: Response) {
+  resp.headers.set('Access-Control-Allow-Origin', allowedOrigin);
+  return resp;
 }

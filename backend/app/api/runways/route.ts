@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { runwayCreateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/runways - Get all runways ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -24,19 +29,16 @@ export async function GET(request: NextRequest) {
     `;
     const params: any[] = [];
 
-    // Filter by airport
     if (airport_id) {
       sql += ' AND r.airport_id = ?';
       params.push(parseInt(airport_id));
     }
 
-    // Filter by status
     if (status) {
       sql += ' AND r.status = ?';
       params.push(status);
     }
 
-    // Filter by runway number
     if (runway_number) {
       sql += ' AND r.runway_number = ?';
       params.push(runway_number);
@@ -53,12 +55,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ========== POST /api/runways - Create new runway ==========
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(runwayCreateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -66,7 +66,6 @@ export async function POST(request: NextRequest) {
 
     const data = validation.data!;
 
-    // Verify airport exists
     const airport = await queryOne(
       'SELECT airport_id FROM Airport WHERE airport_id = ?',
       [data.airport_id]
@@ -76,7 +75,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Airport not found', 404);
     }
 
-    // Check if runway number already exists at this airport
     const existingRunway = await queryOne(
       'SELECT runway_id FROM Runways WHERE airport_id = ? AND runway_number = ?',
       [data.airport_id, data.runway_number]
@@ -86,7 +84,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Runway with this number already exists at this airport', 409);
     }
 
-    // Validate dimensions
     if (data.length_meters <= 0) {
       return errorResponse('Length must be greater than 0', 400);
     }
@@ -95,7 +92,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Width must be greater than 0', 400);
     }
 
-    // Insert runway
     const result = await query<any>(
       `INSERT INTO Runways (
         airport_id, runway_number, length_meters, 
@@ -111,7 +107,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Fetch created runway with joined data
     const newRunway = await queryOne(
       `SELECT 
         r.*,

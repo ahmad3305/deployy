@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { runwayUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/runways/[id] - Get single runway ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -40,7 +45,6 @@ export async function GET(
   }
 }
 
-// ========== PUT /api/runways/[id] - Update runway ==========
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -52,7 +56,6 @@ export async function PUT(
       return errorResponse('Invalid runway ID', 400);
     }
 
-    // Check if runway exists
     const existing = await queryOne<any>(
       'SELECT * FROM Runways WHERE runway_id = ?',
       [runwayId]
@@ -64,7 +67,6 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(runwayUpdateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -72,7 +74,6 @@ export async function PUT(
 
     const updateData = validation.data!;
 
-    // Check if runway number is being changed and if it's unique at this airport
     if (updateData.runway_number && updateData.runway_number !== existing.runway_number) {
       const runwayExists = await queryOne(
         'SELECT runway_id FROM Runways WHERE airport_id = ? AND runway_number = ? AND runway_id != ?',
@@ -84,7 +85,6 @@ export async function PUT(
       }
     }
 
-    // Validate dimensions if being updated
     if (updateData.length_meters !== undefined && updateData.length_meters <= 0) {
       return errorResponse('Length must be greater than 0', 400);
     }
@@ -93,7 +93,6 @@ export async function PUT(
       return errorResponse('Width must be greater than 0', 400);
     }
 
-    // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -129,7 +128,6 @@ export async function PUT(
       values
     );
 
-    // Fetch updated runway with joined data
     const updatedRunway = await queryOne(
       `SELECT 
         r.*,
@@ -150,7 +148,6 @@ export async function PUT(
   }
 }
 
-// ========== DELETE /api/runways/[id] - Delete runway ==========
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -162,7 +159,6 @@ export async function DELETE(
       return errorResponse('Invalid runway ID', 400);
     }
 
-    // Check if runway exists
     const existing = await queryOne(
       'SELECT * FROM Runways WHERE runway_id = ?',
       [runwayId]
@@ -172,7 +168,6 @@ export async function DELETE(
       return notFoundResponse('Runway not found');
     }
 
-    // Delete runway (no FK constraints to check in your schema)
     await query('DELETE FROM Runways WHERE runway_id = ?', [runwayId]);
 
     return noContentResponse();

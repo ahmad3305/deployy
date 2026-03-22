@@ -3,7 +3,12 @@ import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { airlineCreateSchema, airlineUpdateSchema, validateData } from '@/lib/validations';
 
-// ========== GET /api/airlines - Get all airlines ==========
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -13,13 +18,11 @@ export async function GET(request: NextRequest) {
     let sql = 'SELECT * FROM Airline WHERE 1=1';
     const params: any[] = [];
 
-    // Filter by country
     if (country) {
       sql += ' AND country = ?';
       params.push(country);
     }
 
-    // Filter by airline code
     if (airline_code) {
       sql += ' AND airline_code = ?';
       params.push(airline_code);
@@ -36,12 +39,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ========== POST /api/airlines - Create new airline ==========
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
     const validation = validateData(airlineCreateSchema, body);
     if (!validation.success) {
       return validationErrorResponse(validation.errors);
@@ -49,7 +50,6 @@ export async function POST(request: NextRequest) {
 
     const { airline_name, country, airline_code } = validation.data!;
 
-    // Check if airline code already exists
     const existing = await queryOne(
       'SELECT airline_id FROM Airline WHERE airline_code = ?',
       [airline_code]
@@ -59,7 +59,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Airline code already exists', 409);
     }
 
-    // Insert airline
     const result = await query<any>(
       'INSERT INTO Airline (airline_name, country, airline_code) VALUES (?, ?, ?)',
       [airline_name, country, airline_code]

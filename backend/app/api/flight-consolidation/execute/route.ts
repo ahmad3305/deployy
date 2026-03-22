@@ -6,7 +6,6 @@ import { successResponse, errorResponse } from '@/lib/response';
 import { verifyToken } from '@/lib/auth';
 import mysql from 'mysql2/promise';
 
-// Get DB connection for transactions
 async function getConnection() {
   return mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
@@ -16,10 +15,13 @@ async function getConnection() {
   });
 }
 
-// ========== POST /api/flight-consolidation/execute ==========
-// Execute flight consolidation with transaction
+import { handleOptions } from '@/lib/cors';
+
+export function OPTIONS() {
+  return handleOptions();
+}
+
 export async function POST(request: NextRequest) {
-  // Admin only
   const token = request.headers.get('authorization')?.substring(7);
   const user = verifyToken(token!);
   
@@ -41,13 +43,10 @@ export async function POST(request: NextRequest) {
       return errorResponse('Cannot consolidate a flight to itself', 400);
     }
 
-    // Get database connection
     connection = await getConnection();
 
-    // START TRANSACTION
     await connection.beginTransaction();
 
-    // 1. Lock and verify source flight (FOR UPDATE prevents race conditions)
     const [sourceRows] = await connection.execute(
       `SELECT 
         fs.*,
@@ -79,7 +78,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Cannot consolidate completed flight', 400);
     }
 
-    // 2. Lock and verify target flight
     const [targetRows] = await connection.execute(
       `SELECT 
         fs.*,
@@ -109,13 +107,11 @@ export async function POST(request: NextRequest) {
       return errorResponse('Cannot consolidate to cancelled flight', 400);
     }
 
-    // 3. Verify same destination
     if (sourceFlight.destination_airport_id !== targetFlight.destination_airport_id) {
       await connection.rollback();
       return errorResponse('Flights must have the same destination', 400);
     }
 
-    // 4. Count passengers on source flight
     const [passengerCountRows] = await connection.execute(
       `SELECT COUNT(*) as count 
        FROM Tickets 
@@ -131,7 +127,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Source flight has no active passengers', 400);
     }
 
-    // 5. Count current passengers on target flight
     const [targetPassengerRows] = await connection.execute(
       `SELECT COUNT(*) as count 
        FROM Tickets 
@@ -151,7 +146,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. Update all tickets from source to target flight
     const [updateResult] = await connection.execute(
       `UPDATE Tickets 
        SET flight_schedule_id = ?
@@ -162,7 +156,6 @@ export async function POST(request: NextRequest) {
 
     const ticketsUpdated = (updateResult as any).affectedRows;
 
-    // 7. Cancel source flight
     await connection.execute(
       `UPDATE Flight_schedules 
        SET flight_status = 'Cancelled'
@@ -170,7 +163,6 @@ export async function POST(request: NextRequest) {
       [source_flight_schedule_id]
     );
 
-    // 8. Record consolidation in Flight_consolidation table
     const [consolidationResult] = await connection.execute(
       `INSERT INTO Flight_consolidation (
         original_flight_schedule_id, 
@@ -185,7 +177,6 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // COMMIT TRANSACTION
     await connection.commit();
 
     return successResponse({
@@ -208,7 +199,6 @@ export async function POST(request: NextRequest) {
     }, 'Flight consolidation executed successfully');
 
   } catch (error: any) {
-    // ROLLBACK on error
     if (connection) {
       await connection.rollback();
     }
