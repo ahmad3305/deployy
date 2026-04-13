@@ -11,7 +11,7 @@
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.9.7",
-    "next": "14.2.3",
+    "next": "16.2.3",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "zod": "^4.3.6"
@@ -22,5 +22,10 @@
     "@types/node": "^20.11.30",
     "@types/react": "19.2.14",
     "typescript": "^5.4.5"
+  }
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   }
 }
