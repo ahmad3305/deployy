@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { flightScheduleCreateSchema, validateData } from '@/lib/validations';
-import { validateAndPlanCrewForSchedule, createTasksForSchedule, autoAssignStaffForSchedule } from '@/utils/crew-validator'; // <-- Update import path if needed
+import { validateAndPlanCrewForSchedule, createTasksForSchedule, autoAssignStaffForSchedule } from '@/lib/crew-validator'; // <-- Update import path if needed
 import { handleOptions } from '@/lib/cors';
 
 export function OPTIONS() {
@@ -165,9 +165,9 @@ export async function POST(request: NextRequest) {
       newSchedule,
       crewResult.kind === 'ok'
         ? 'Flight schedule created and crew assigned'
-        : `Flight schedule delayed: ${newSchedule.delay_reason}`
+        : `Flight schedule delayed: ${newSchedule.delay_reason}`,
+      { crewResult }
     );
-    
   } catch (error: any) {
     console.error('Create flight schedule error:', error);
     return errorResponse('Failed to create flight schedule: ' + error.message, 500);
