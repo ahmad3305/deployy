@@ -145,55 +145,6 @@ export async function PUT(
       return errorResponse('Arrival time must be after departure time', 400);
     }
 
-    if (updateData.aircraft_id || updateData.departure_datetime || updateData.arrival_datetime) {
-      const aircraftConflict = await queryOne(
-        `SELECT flight_schedule_id FROM Flight_schedules 
-         WHERE aircraft_id = ? 
-         AND flight_schedule_id != ?
-         AND flight_status NOT IN ('Cancelled', 'Completed')
-         AND (
-           (departure_datetime <= ? AND arrival_datetime >= ?) OR
-           (departure_datetime <= ? AND arrival_datetime >= ?) OR
-           (departure_datetime >= ? AND arrival_datetime <= ?)
-         )`,
-        [
-          newAircraftId,
-          scheduleId,
-          newDeparture, newDeparture,
-          newArrival, newArrival,
-          newDeparture, newArrival
-        ]
-      );
-
-      if (aircraftConflict) {
-        return errorResponse('Aircraft is already scheduled for another flight at this time', 409);
-      }
-    }
-
-    if (updateData.gate_id || updateData.departure_datetime || updateData.arrival_datetime) {
-      const gateConflict = await queryOne(
-        `SELECT flight_schedule_id FROM Flight_schedules 
-         WHERE gate_id = ? 
-         AND flight_schedule_id != ?
-         AND flight_status NOT IN ('Cancelled', 'Completed')
-         AND (
-           (departure_datetime <= ? AND arrival_datetime >= ?) OR
-           (departure_datetime <= ? AND arrival_datetime >= ?) OR
-           (departure_datetime >= ? AND arrival_datetime <= ?)
-         )`,
-        [
-          newGateId,
-          scheduleId,
-          newDeparture, newDeparture,
-          newArrival, newArrival,
-          newDeparture, newArrival
-        ]
-      );
-
-      if (gateConflict) {
-        return errorResponse('Gate is already assigned to another flight at this time', 409);
-      }
-    }
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -308,7 +259,6 @@ export async function DELETE(
       );
     } else {
       await query('DELETE FROM Flight_schedules WHERE flight_schedule_id = ?', [scheduleId]);
-
       return noContentResponse();
     }
   } catch (error: any) {
