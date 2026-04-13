@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api";
+import { API_BASE } from "@/app/config";
 
 type PrivateAircraft = {
   private_aircraft_id: number;

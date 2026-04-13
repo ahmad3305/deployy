@@ -525,7 +525,7 @@ export default function CreateSchedulePage() {
                 <button
                   type="button"
                   style={styles.cancelBtn}
-                  onClick={() => router.push("/admin/schedules/edit")}
+                  onClick={() => router.push("/admin/schedules")}
                   disabled={submitting}
                 >
                   Cancel
