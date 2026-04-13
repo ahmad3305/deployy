@@ -34,7 +34,8 @@ async function getHandler(req: AuthenticatedRequest, ticketId: number) {
       fs.departure_datetime,
       fs.arrival_datetime,
       fs.flight_status,
-      fs.gate_id,
+      g.gate_number,
+      ter.terminal_name,
       f.flight_number,
       f.flight_type,
       f.estimated_duration,
@@ -54,6 +55,8 @@ async function getHandler(req: AuthenticatedRequest, ticketId: number) {
     FROM Tickets t
     LEFT JOIN Passengers p ON t.passenger_id = p.passenger_id
     LEFT JOIN Flight_schedules fs ON t.flight_schedule_id = fs.flight_schedule_id
+    LEFT JOIN Gates g ON fs.gate_id = g.gate_id
+    LEFT JOIN Terminals ter ON g.terminal_id = ter.terminal_id
     LEFT JOIN Flights f ON fs.flight_id = f.flight_id
     LEFT JOIN Airline al ON f.airline_id = al.airline_id
     LEFT JOIN Airport src ON f.source_airport_id = src.airport_id
@@ -72,6 +75,7 @@ async function getHandler(req: AuthenticatedRequest, ticketId: number) {
 
   return { kind: 'ok' as const, ticket };
 }
+
 
 export const GET = requireAuth(async (req: AuthenticatedRequest) => {
   try {

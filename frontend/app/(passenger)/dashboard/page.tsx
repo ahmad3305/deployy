@@ -4,56 +4,220 @@ import { useRouter } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api";
 
+type Ticket = {
+  ticket_id: number;
+  flight_number: string;
+  departure_datetime: string;
+  source_airport: string;
+  destination_airport: string;
+  seat_number: string;
+  status: string;
+};
+
+type Flight = {
+  flight_schedule_id: number;
+  airline_name: string;
+  airline_code: string;
+  flight_number: string;
+  source_airport_name: string;
+  source_city: string;
+  source_country: string;
+  source_airport_code: string;
+  destination_airport_name: string;
+  destination_city: string;
+  destination_country: string;
+  destination_airport_code: string;
+  departure_datetime: string;
+  created_at: string;
+  estimated_duration: string;
+  flight_type: string;
+};
+
+type RunwayBooking = {
+  booking_id: number;
+  runway_id: number;
+  runway_code: string;
+  booking_date: string;
+  start_time: string;
+  end_time: string;
+  booking_status: string;
+  registration_number: string;
+  model_name: string;
+};
+
 export default function PassengerDashboard() {
   const [user, setUser] = useState<any>(null);
-  const [tickets, setTickets] = useState<any[]>([]);
-  const [flights, setFlights] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [runwayBookings, setRunwayBookings] = useState<RunwayBooking[]>([]);
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const [displayedFlights, setDisplayedFlights] = useState<Flight[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
+  const [loadingRunways, setLoadingRunways] = useState(true);
   const [loadingFlights, setLoadingFlights] = useState(true);
   const [error, setError] = useState<string>("");
+  const [displayedFlightsCount, setDisplayedFlightsCount] = useState(5);
   const router = useRouter();
 
   useEffect(() => {
-    const storedUser = typeof window !== "undefined" ? localStorage.getItem("user") : null;
-    if (storedUser) setUser(JSON.parse(storedUser));
-    else router.push("/login");
+    const storedUser = typeof window !== "undefined" ? sessionStorage.getItem("user") : null;
+    console.log("Stored user:", storedUser); // Debug
+    
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        console.log("User role:", parsed.role); // Debug
+        
+        // Check if user is a customer/passenger
+        if (parsed.role !== "Customer") {
+          console.log("Not a customer, redirecting to login");
+          router.push("/login");
+          return;
+        }
+        
+        setUser(parsed);
+      } catch (e) {
+        console.error("Error parsing user:", e);
+        router.push("/login");
+      }
+    } else {
+      console.log("No user in sessionStorage");
+      router.push("/login");
+    }
+    
+    setIsLoading(false);
   }, [router]);
 
+  // Fetch tickets
   useEffect(() => {
     if (user?.passenger_id) {
       setLoadingTickets(true);
-      fetch(`${API_BASE}/tickets?passenger_id=${user.passenger_id}&status=upcoming`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      console.log("Fetching tickets for passenger:", user.passenger_id);
+
+      fetch(`${API_BASE}/tickets?passenger_id=${user.passenger_id}`, {
+        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
       })
-        .then(r => r.json())
-        .then(r => setTickets(Array.isArray(r.data) ? r.data : []))
-        .catch(() => setError("Failed to load tickets"))
+        .then((r) => {
+          console.log("Tickets response status:", r.status);
+          return r.json();
+        })
+        .then((r) => {
+          console.log("Tickets response:", r);
+          const allTickets: Ticket[] = Array.isArray(r.data) ? r.data : [];
+          setTickets(allTickets);
+        })
+        .catch((err) => {
+          console.error("Error fetching tickets:", err);
+          setError("Failed to load tickets");
+        })
         .finally(() => setLoadingTickets(false));
     }
   }, [user]);
 
+   
+    // Fetch runway bookings
+  useEffect(() => {
+    if (user?.user_id) {
+      setLoadingRunways(true);
+      console.log("Fetching runway bookings for user:", user.user_id);
+
+      fetch(`${API_BASE}/runway-booking/private`, {
+        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
+      })
+        .then((r) => {
+          console.log("Runway bookings response status:", r.status);
+          return r.json();
+        })
+        .then((r) => {
+          console.log("Runway bookings response:", r);
+          const allBookings: RunwayBooking[] = Array.isArray(r.data) ? r.data : [];
+          console.log("All bookings received (count):", allBookings.length);
+
+          // Filter for upcoming bookings
+          const upcomingBookings = allBookings.filter((booking: RunwayBooking) => {
+            const status = booking.booking_status?.toLowerCase();
+
+            const isValidStatus =
+              status === "reserved" || status === "approved";
+
+            let bookingDateTime;
+            try {
+              if (booking.booking_date.includes('T')) {
+                bookingDateTime = new Date(booking.booking_date);
+              } else {
+                bookingDateTime = new Date(`${booking.booking_date}T${booking.start_time}`);
+              }
+            } catch (e) {
+              return false;
+            }
+
+            const isFuture = bookingDateTime > new Date();
+            return isValidStatus && isFuture;
+          });
+
+          setRunwayBookings(upcomingBookings);
+        })
+        .catch((err) => {
+          console.error("Error fetching runway bookings:", err);
+        })
+        .finally(() => setLoadingRunways(false));
+    }
+  }, [user]);
+
+  // Fetch ALL flights
   useEffect(() => {
     setLoadingFlights(true);
-    fetch(`${API_BASE}/flights?upcoming=true`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    console.log("Fetching all flights");
+
+    fetch(`${API_BASE}/flight-schedules`, {
+      headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
     })
-      .then(r => r.json())
-      .then(r => setFlights(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setError("Failed to load flights"))
+      .then((r) => r.json())
+      .then((r) => {
+        console.log("Flights response:", r);
+        const flightsData: Flight[] = Array.isArray(r.data) ? r.data : [];
+        setFlights(flightsData);
+        setDisplayedFlights(flightsData.slice(0, 5));
+        setDisplayedFlightsCount(5);
+      })
+      .catch((err) => {
+        console.error("Error fetching flights:", err);
+        setError("Failed to load flights");
+      })
       .finally(() => setLoadingFlights(false));
   }, []);
+
+  const handleLoadMore = () => {
+    const newCount = displayedFlightsCount + 10;
+    setDisplayedFlightsCount(newCount);
+    setDisplayedFlights(flights.slice(0, newCount));
+  };
+
+  // Show loading while checking auth
+  if (isLoading) {
+    return (
+      <div style={styles.bg}>
+        <div style={{ textAlign: "center", paddingTop: 100, color: "#e6eefb" }}>
+          Loading dashboard...
+        </div>
+      </div>
+    );
+  }
 
   if (!user) return null;
 
   return (
     <div style={styles.bg}>
       <div style={styles.shell}>
+        {/* Rest of your JSX remains the same */}
         <header style={styles.header}>
           <div>
             <h1 style={styles.h1}>
               ✈️ Welcome,{" "}
               <span style={styles.accent}>
-                {user?.name?.split(" ")[0] || user?.email?.split("@")[0] || "Passenger"}
+                {user?.name?.split(" ")[0] ||
+                  user?.email?.split("@")[0] ||
+                  "Passenger"}
               </span>
               !
             </h1>
@@ -61,21 +225,42 @@ export default function PassengerDashboard() {
               Manage your bookings, check tickets, and get ready to fly 🌏
             </p>
           </div>
-          <button style={styles.cta} onClick={() => router.push("/flights/search")}>
-            Book a Flight
-          </button>
+          <div style={styles.buttonGroup}>
+            <button
+              style={styles.cta}
+              onClick={() => router.push("/flight_booking")}
+            >
+              Book a Flight
+            </button>
+            <button
+              style={styles.cta}
+              onClick={() => router.push("/runway_booking/available_runway")}
+            >
+              Book a Runway
+            </button>
+            <button
+              style={styles.cta}
+              onClick={() => router.push("/cargo-shipment/create")}
+            >
+              Ship Cargo
+            </button>
+          </div>
         </header>
 
         {/* MY TICKETS */}
         <section>
-          <SectionHeading>My Upcoming Tickets</SectionHeading>
+          <SectionHeading>My Tickets ({tickets.length} total)</SectionHeading>
           {loadingTickets ? (
-            <AestheticCard><div>Loading tickets...</div></AestheticCard>
+            <AestheticCard>
+              <div>Loading tickets...</div>
+            </AestheticCard>
           ) : error ? (
             <AestheticCard style={styles.error}>{error}</AestheticCard>
           ) : tickets.length === 0 ? (
             <AestheticCard>
-              <div style={{ textAlign: "center" }}>You have no upcoming tickets.</div>
+              <div style={{ textAlign: "center" }}>
+                You have no tickets.
+              </div>
             </AestheticCard>
           ) : (
             <AestheticCard noPad>
@@ -93,15 +278,17 @@ export default function PassengerDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tickets.map((ticket, i) => (
+                    {tickets.map((ticket: Ticket, i: number) => (
                       <tr key={ticket.ticket_id || i}>
                         <td>{ticket.flight_number ?? "—"}</td>
                         <td>
-                          {ticket.departure_time
-                            ? new Date(ticket.departure_time).toLocaleString()
+                          {ticket.departure_datetime
+                            ? new Date(
+                                ticket.departure_datetime
+                              ).toLocaleString()
                             : "—"}
                         </td>
-                        <td>{ticket.origin_airport ?? "—"}</td>
+                        <td>{ticket.source_airport ?? "—"}</td>
                         <td>{ticket.destination_airport ?? "—"}</td>
                         <td>{ticket.seat_number ?? "—"}</td>
                         <td>
@@ -112,7 +299,9 @@ export default function PassengerDashboard() {
                         <td>
                           <button
                             style={styles.smallBtn}
-                            onClick={() => router.push(`/tickets/${ticket.ticket_id}`)}
+                            onClick={() =>
+                              router.push(`/tickets/${ticket.ticket_id}`)
+                            }
                           >
                             View
                           </button>
@@ -126,86 +315,63 @@ export default function PassengerDashboard() {
           )}
         </section>
 
-        {/* UPCOMING FLIGHTS */}
+        {/* RUNWAY BOOKINGS */}
         <section>
-          <SectionHeading>Available Flights</SectionHeading>
-          {loadingFlights ? (
+          <SectionHeading>My Runway Bookings</SectionHeading>
+          {loadingRunways ? (
             <AestheticCard>
-              <div>Loading flights...</div>
+              <div>Loading runway bookings...</div>
             </AestheticCard>
-          ) : error ? (
-            <AestheticCard style={styles.error}>{error}</AestheticCard>
-          ) : flights.length === 0 ? (
+          ) : runwayBookings.length === 0 ? (
             <AestheticCard>
-              <div style={{ textAlign: "center" }}>No upcoming flights found.</div>
+              <div style={{ textAlign: "center" }}>
+                You have no upcoming runway bookings.
+              </div>
             </AestheticCard>
           ) : (
             <AestheticCard noPad>
               <div style={{ overflowX: "auto" }}>
-                <table style={styles.tableLarge}>
+                <table style={styles.table}>
                   <thead>
                     <tr>
-                      <th>Airline</th>
-                      <th>Flight No.</th>
-                      <th>From</th>
-                      <th>To</th>
-                      <th>Duration</th>
-                      <th>Flight Type</th>
+                      <th>Runway</th>
+                      <th>Date</th>
+                      <th>Time</th>
+                      <th>Aircraft</th>
+                      <th>Registration</th>
+                      <th>Status</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {flights.map((flight, idx) => (
-                      <tr key={flight.flight_id || idx}>
-                        <td style={{ fontWeight: 600 }}>
-                          {flight.airline_name || "—"}{" "}
-                          <span style={{
-                            color: "#60a5fa",
-                            fontWeight: 500,
-                            fontSize: 13,
-                            marginLeft: 5
-                          }}>
-                            ({flight.airline_code || "—"})
-                          </span>
-                        </td>
-                        <td>{flight.flight_number ?? "—"}</td>
+                    {runwayBookings.map((booking: RunwayBooking, i: number) => (
+                      <tr key={booking.booking_id || i}>
+                        <td>{booking.runway_code ?? "—"}</td>
                         <td>
-                          <span>{flight.source_airport_name || "—"}</span>
-                          <div style={{ fontSize: 12, color: "#60a5fa" }}>
-                            {flight.source_city}, {flight.source_country}
-                          </div>
-                          <div style={{ fontSize: 12, color: "#64748b" }}>
-                            {flight.source_airport_code}
-                          </div>
+                          {booking.booking_date
+                            ? new Date(booking.booking_date).toLocaleDateString()
+                            : "—"}
                         </td>
                         <td>
-                          <span>{flight.destination_airport_name || "—"}</span>
-                          <div style={{ fontSize: 12, color: "#60a5fa" }}>
-                            {flight.destination_city}, {flight.destination_country}
-                          </div>
-                          <div style={{ fontSize: 12, color: "#64748b" }}>
-                            {flight.destination_airport_code}
-                          </div>
+                          {booking.start_time && booking.end_time
+                            ? `${booking.start_time} - ${booking.end_time}`
+                            : "—"}
                         </td>
-                        <td>{flight.estimated_duration ?? "—"}</td>
+                        <td>{booking.model_name ?? "—"}</td>
+                        <td>{booking.registration_number ?? "—"}</td>
                         <td>
-                          <span style={{
-                            background: "#2563eb28",
-                            color: "#2563eb",
-                            borderRadius: 8,
-                            padding: "2px 11px",
-                            fontSize: 13.3,
-                            fontWeight: 600,
-                          }}>
-                            {flight.flight_type ?? "—"}
+                          <span style={badgeForStatus(booking.booking_status ?? "—")}>
+                            {booking.booking_status ?? "—"}
                           </span>
                         </td>
                         <td>
                           <button
                             style={styles.smallBtn}
-                            onClick={() => router.push(`/flights/${flight.flight_id}`)}
+                            onClick={() =>
+                              router.push(`/runway_booking/${booking.booking_id}`)
+                            }
                           >
-                            Book
+                            View
                           </button>
                         </td>
                       </tr>
@@ -215,11 +381,116 @@ export default function PassengerDashboard() {
               </div>
             </AestheticCard>
           )}
-          <div style={{ marginTop: 18, textAlign: "center" }}>
-            <button style={styles.cta} onClick={() => router.push("/flights/search")}>
-              Search More Flights
-            </button>
-          </div>
+        </section>
+
+        {/* ALL FLIGHTS */}
+        <section>
+          <SectionHeading>All Flights ({flights.length} total)</SectionHeading>
+          {loadingFlights ? (
+            <AestheticCard>
+              <div>Loading flights...</div>
+            </AestheticCard>
+          ) : flights.length === 0 ? (
+            <AestheticCard>
+              <div style={{ textAlign: "center" }}>
+                No flights found.
+              </div>
+            </AestheticCard>
+          ) : (
+            <>
+              <AestheticCard noPad>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={styles.tableLargeExpanded}>
+                    <thead>
+                      <tr>
+                        <th>Airline</th>
+                        <th>Flight No.</th>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>Scheduled Date</th>
+                        <th>Duration</th>
+                        <th>Flight Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedFlights.map(
+                        (flight: Flight, idx: number) => (
+                          <tr key={flight.flight_schedule_id || idx}>
+                            <td style={{ fontWeight: 600 }}>
+                              {flight.airline_name || "—"}{" "}
+                              <span
+                                style={{
+                                  color: "#60a5fa",
+                                  fontWeight: 500,
+                                  fontSize: 13,
+                                  marginLeft: 5,
+                                }}
+                              >
+                                ({flight.airline_code || "—"})
+                              </span>
+                            </td>
+                            <td>{flight.flight_number ?? "—"}</td>
+                            <td>
+                              <span>
+                                {flight.source_airport_name || "—"}
+                              </span>
+                              <div style={{ fontSize: 12, color: "#60a5fa" }}>
+                                {flight.source_city}, {flight.source_country}
+                              </div>
+                              <div style={{ fontSize: 12, color: "#64748b" }}>
+                                {flight.source_airport_code}
+                              </div>
+                            </td>
+                            <td>
+                              <span>
+                                {flight.destination_airport_name || "—"}
+                              </span>
+                              <div style={{ fontSize: 12, color: "#60a5fa" }}>
+                                {flight.destination_city},{" "}
+                                {flight.destination_country}
+                              </div>
+                              <div style={{ fontSize: 12, color: "#64748b" }}>
+                                {flight.destination_airport_code}
+                              </div>
+                            </td>
+                            <td>
+                              {(flight.departure_datetime
+                                ? new Date(flight.departure_datetime)
+                                : new Date(flight.created_at)
+                              ).toLocaleString()}
+                            </td>
+                            <td>{flight.estimated_duration ?? "—"}</td>
+                            <td>
+                              <span
+                                style={{
+                                  background: "#2563eb28",
+                                  color: "#2563eb",
+                                  borderRadius: 8,
+                                  padding: "2px 11px",
+                                  fontSize: 13.3,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {flight.flight_type ?? "—"}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </AestheticCard>
+
+              {displayedFlightsCount < flights.length && (
+                <div style={{ marginTop: 18, textAlign: "center" }}>
+                  <button style={styles.cta} onClick={handleLoadMore}>
+                    Load More Flights ({displayedFlightsCount} of {flights.length})
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </section>
       </div>
     </div>
@@ -245,7 +516,6 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Accepts children & merges extra styles
 function AestheticCard({
   children,
   style,
@@ -275,7 +545,7 @@ function AestheticCard({
 function badgeForStatus(status: string) {
   let bg = "#fbbf24cc";
   let color = "#543c11";
-  if (status?.toLowerCase() === "confirmed" || status?.toLowerCase() === "booked") {
+  if (status?.toLowerCase() === "confirmed" || status?.toLowerCase() === "booked" || status?.toLowerCase() === "approved") {
     bg = "#22c55ecc";
     color = "#073c19";
   }
@@ -283,7 +553,7 @@ function badgeForStatus(status: string) {
     bg = "#f87171cc";
     color = "#75030c";
   }
-  if (status?.toLowerCase() === "pending") {
+  if (status?.toLowerCase() === "pending" || status?.toLowerCase() === "reserved" || status?.toLowerCase() === "checked-in") {
     bg = "#60a5facc";
     color = "#17315a";
   }
@@ -302,20 +572,19 @@ function badgeForStatus(status: string) {
   };
 }
 
-// --- STYLES ---
 const styles: Record<string, React.CSSProperties> = {
   bg: {
     minHeight: "100vh",
     width: "100vw",
-    background:
-      "linear-gradient(140deg, #1e293b 70%, #2563eb 160%)",
+    background: "linear-gradient(140deg, #1e293b 70%, #2563eb 160%)",
     color: "#e6eefb",
     padding: 0,
     fontFamily:
       "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
   },
+
   shell: {
-    maxWidth: 920,
+    maxWidth: 1200,
     margin: "0 auto",
     padding: "32px 10px 50px 10px",
     minHeight: "100vh",
@@ -329,6 +598,26 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 24,
     padding: "8px 0 28px",
     borderBottom: "1.5px solid #1e293b55",
+  },
+  
+  buttonGroup: {
+    display: "flex",
+    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  cta: {
+    border: "none",
+    padding: "13px 20px",
+    background: "linear-gradient(80deg,#2563eb 70%,#60a5fa)",
+    color: "#fff",
+    borderRadius: 12,
+    fontWeight: 700,
+    fontSize: 17,
+    cursor: "pointer",
+    boxShadow: "0 2px 12px #2563eb44",
+    transition: "background 0.18s",
   },
   h1: {
     margin: 0,
@@ -354,19 +643,7 @@ const styles: Record<string, React.CSSProperties> = {
     textShadow: "0 2px 10px #0ea5e933",
     fontWeight: 500,
   },
-  cta: {
-    border: "none",
-    padding: "13px 20px",
-    background: "linear-gradient(80deg,#2563eb 70%,#60a5fa)",
-    color: "#fff",
-    borderRadius: 12,
-    fontWeight: 700,
-    fontSize: 17,
-    cursor: "pointer",
-    boxShadow: "0 2px 12px #2563eb44",
-    marginLeft: 6,
-    transition: "background 0.18s",
-  },
+  
   section: { marginBottom: 32 },
   table: {
     width: "100%",
@@ -438,17 +715,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 15.7,
     boxShadow: "0 2px 8px #2563eb33",
   },
-  tableLarge: {              // <--- Ensure this is part of the styles object, comma after previous
+  tableLargeExpanded: {
     width: "100%",
     background: "none",
-    borderRadius: 10,
-    borderCollapse: "collapse",
-    fontSize: 15.8,
-    boxShadow: "none",
+    borderRadius: 16,
+    borderCollapse: "separate",
+    borderSpacing: "0 0.4rem",
+    fontSize: 17,
     color: "#dde7fa",
     marginBottom: 0,
     marginTop: 0,
-    minWidth: 950,
-  }
+    minWidth: 1200,
+  },
 };
-

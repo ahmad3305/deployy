@@ -1,10 +1,15 @@
-// frontend/app/layout.tsx
 "use client";
 import React, { useState } from "react";
-
+import { useRouter } from "next/navigation";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const router = useRouter();
+
+  const handleBookFlight = () => {
+    router.push("/flight_booking");
+    setMenuOpen(false);
+  };
 
   return (
     <html lang="en">
@@ -80,16 +85,51 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             gap: 12,
           }}
         >
-          <a href="/(passenger)/dashboard" style={menuLinkStyle}>
+          <a
+            href="/dashboard"
+            style={menuLinkStyle}
+            onClick={(e) => {
+              e.preventDefault();
+              router.push("/dashboard");
+              setMenuOpen(false);
+            }}
+          >
             Dashboard
           </a>
-          <a href="/(passenger)/flights/search" style={menuLinkStyle}>
+          <button
+            style={{
+              ...menuLinkStyle,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+            onClick={handleBookFlight}
+          >
             Book Flight
+          </button>
+          <a
+            href="/profile"
+            style={menuLinkStyle}
+            onClick={(e) => {
+              e.preventDefault();
+              router.push("/profile");
+              setMenuOpen(false);
+            }}
+          >
+            Profile
           </a>
-          <a href="/(passenger)/tickets" style={menuLinkStyle}>My Tickets</a>
-          <a href="/(passenger)/baggage" style={menuLinkStyle}>My Baggage</a>
-          <a href="/(passenger)/cargo/track" style={menuLinkStyle}>Track Cargo</a>
-          <a href="/profile" style={menuLinkStyle}>Profile</a>
+           <a
+            href="/cargo-shipment/track"
+            style={menuLinkStyle}
+            onClick={(e) => {
+              e.preventDefault();
+              router.push("/cargo-shipment/track");
+              setMenuOpen(false);
+            }}
+          >
+            Track Cargo
+          </a>
         </aside>
 
         {/* SLIDING VERTICAL SEPARATOR (always rendered, animates in sync) */}

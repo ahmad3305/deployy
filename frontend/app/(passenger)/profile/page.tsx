@@ -70,7 +70,6 @@ function ProfileDetails({ profile }: { profile: any }) {
       <InfoRow label="Email" value={profile.email ?? "—"} />
       <InfoRow label="Passport Number" value={profile.passport_number ?? "—"} />
       <InfoRow label="User ID" value={profile.user_id ?? "—"} />
-      <InfoRow label="Passenger ID" value={profile.passenger_id ?? "—"} />
       <InfoRow label="Account Created" value={profile.created_at ? new Date(profile.created_at).toLocaleString() : "—"} />
     </div>
   );

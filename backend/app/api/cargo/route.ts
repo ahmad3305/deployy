@@ -1,17 +1,17 @@
-import { NextRequest } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { cargoCreateSchema, validateData } from '@/lib/validations';
-
+import { requireAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
 import { handleOptions } from '@/lib/cors';
 
 export function OPTIONS() {
   return handleOptions();
 }
 
-export async function GET(request: NextRequest) {
+async function getHandler(req: AuthenticatedRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    const user = req.user!;
+    const { searchParams } = new URL(req.url);
     const flight_id = searchParams.get('flight_id');
     const origin_airport_id = searchParams.get('origin_airport_id');
     const destination_airport_id = searchParams.get('destination_airport_id');
@@ -42,31 +42,32 @@ export async function GET(request: NextRequest) {
     `;
     const params: any[] = [];
 
+    // Customers only see their own cargo
+    if (user.role === 'Customer') {
+      sql += ' AND c.sender_id = ?';
+      params.push(user.user_id);
+    }
+
     if (flight_id) {
       sql += ' AND c.flight_id = ?';
       params.push(parseInt(flight_id));
     }
-
     if (origin_airport_id) {
       sql += ' AND c.origin_airport_id = ?';
       params.push(parseInt(origin_airport_id));
     }
-
     if (destination_airport_id) {
       sql += ' AND c.destination_airport_id = ?';
       params.push(parseInt(destination_airport_id));
     }
-
     if (status) {
       sql += ' AND c.status = ?';
       params.push(status);
     }
-
     if (tracking_number) {
       sql += ' AND c.tracking_number = ?';
       params.push(tracking_number);
     }
-
     if (cargo_type) {
       sql += ' AND c.cargo_type = ?';
       params.push(cargo_type);
@@ -75,7 +76,6 @@ export async function GET(request: NextRequest) {
     sql += ' ORDER BY c.cargo_id DESC';
 
     const cargo = await query(sql, params);
-
     return successResponse(cargo, 'Cargo retrieved successfully');
   } catch (error: any) {
     console.error('Get cargo error:', error);
@@ -83,9 +83,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function postHandler(req: AuthenticatedRequest) {
   try {
-    const body = await request.json();
+    const user = req.user!;
+    const body = await req.json();
 
     const validation = validateData(cargoCreateSchema, body);
     if (!validation.success) {
@@ -98,7 +99,6 @@ export async function POST(request: NextRequest) {
       'SELECT * FROM Flights WHERE flight_id = ?',
       [data.flight_id]
     );
-
     if (!flight) {
       return errorResponse('Flight not found', 404);
     }
@@ -107,7 +107,6 @@ export async function POST(request: NextRequest) {
       'SELECT airport_id FROM Airport WHERE airport_id = ?',
       [data.origin_airport_id]
     );
-
     if (!originAirport) {
       return errorResponse('Origin airport not found', 404);
     }
@@ -116,7 +115,6 @@ export async function POST(request: NextRequest) {
       'SELECT airport_id FROM Airport WHERE airport_id = ?',
       [data.destination_airport_id]
     );
-
     if (!destAirport) {
       return errorResponse('Destination airport not found', 404);
     }
@@ -133,19 +131,19 @@ export async function POST(request: NextRequest) {
       'SELECT cargo_id FROM Cargo WHERE tracking_number = ?',
       [data.tracking_number]
     );
-
     if (existingTracking) {
       return errorResponse('Tracking number already exists', 409);
     }
 
     const result = await query<any>(
       `INSERT INTO Cargo (
-        flight_id, tracking_number, cargo_type, description, weight_kg,
-        origin_airport_id, destination_airport_id, 
+        sender_id, flight_id, tracking_number, cargo_type, description, weight_kg,
+        origin_airport_id, destination_airport_id,
         sender_name, sender_contact, reciever_name, reciever_contact,
         status, is_insured
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Booked', ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Booked', ?)`,
       [
+        user.user_id,
         data.flight_id,
         data.tracking_number,
         data.cargo_type,
@@ -157,7 +155,7 @@ export async function POST(request: NextRequest) {
         data.sender_contact,
         data.reciever_name,
         data.reciever_contact,
-        data.is_insured || false
+        data.is_insured || false,
       ]
     );
 
@@ -188,3 +186,6 @@ export async function POST(request: NextRequest) {
     return errorResponse('Failed to create cargo shipment: ' + error.message, 500);
   }
 }
+
+export const GET = requireAuth(getHandler);
+export const POST = requireAuth(postHandler);

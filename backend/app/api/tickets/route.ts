@@ -67,7 +67,13 @@ async function getHandler(req: AuthenticatedRequest) {
 
     sql += ' ORDER BY t.booking_date DESC';
 
+    console.log('Fetching tickets with SQL:', sql);
+    console.log('Params:', params);
+
     const tickets = await query(sql, params);
+    
+    console.log(`Retrieved ${tickets.length} tickets`);
+    
     return successResponse(tickets, 'Tickets retrieved successfully');
   } catch (error: any) {
     console.error('Get tickets error:', error);
@@ -81,6 +87,8 @@ async function postHandler(req: AuthenticatedRequest) {
   try {
     const user = req.user!;
     const body = await req.json();
+
+    console.log('Booking ticket request:', body);
 
     const validation = validateData(ticketCreateSchema, body);
     if (!validation.success) {
@@ -189,11 +197,24 @@ async function postHandler(req: AuthenticatedRequest) {
       );
 
       const [ticketRows] = await conn.execute(
-        `SELECT t.*, p.first_name, p.last_name, f.flight_number
+        `SELECT 
+          t.*,
+          p.first_name,
+          p.last_name,
+          p.email,
+          fs.departure_datetime,
+          fs.arrival_datetime,
+          f.flight_number,
+          al.airline_name,
+          src.airport_name as source_airport,
+          dest.airport_name as destination_airport
          FROM Tickets t
          LEFT JOIN Passengers p ON t.passenger_id = p.passenger_id
          LEFT JOIN Flight_schedules fs ON t.flight_schedule_id = fs.flight_schedule_id
          LEFT JOIN Flights f ON fs.flight_id = f.flight_id
+         LEFT JOIN Airline al ON f.airline_id = al.airline_id
+         LEFT JOIN Airport src ON f.source_airport_id = src.airport_id
+         LEFT JOIN Airport dest ON f.destination_airport_id = dest.airport_id
          WHERE t.ticket_id = ?`,
         [ticketId]
       );
@@ -205,6 +226,7 @@ async function postHandler(req: AuthenticatedRequest) {
       return errorResponse(result.message, result.status);
     }
 
+    console.log('Ticket booked successfully:', result.ticket);
     return createdResponse(result.ticket, 'Ticket booked successfully (Pending payment)');
   } catch (error: any) {
     if (error?.code === 'ER_DUP_ENTRY') {

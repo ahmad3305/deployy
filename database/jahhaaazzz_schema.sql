@@ -388,6 +388,20 @@ CREATE TABLE IF NOT EXISTS private_aircraft (
   FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
 
+CREATE TABLE `Price` (
+  `price_id` INT AUTO_INCREMENT,
+  `source_airport_id` INT NOT NULL,
+  `destination_airport_id` INT NOT NULL,
+  `economy_price` DECIMAL(10,2) NOT NULL,
+  `business_price` DECIMAL(10,2) NOT NULL,
+  `first_class_price` DECIMAL(10,2) NOT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`price_id`),
+  CONSTRAINT `fk_price_source_airport` FOREIGN KEY (`source_airport_id`) REFERENCES `Airport`(`airport_id`),
+  CONSTRAINT `fk_price_dest_airport` FOREIGN KEY (`destination_airport_id`) REFERENCES `Airport`(`airport_id`)
+);
+
 -- ======== Constraints ========
 
 ALTER TABLE `Airport`
@@ -592,10 +606,6 @@ INSERT INTO Users (email, password_hash, role) VALUES
 
 
 
-
-
-
-
 ALTER TABLE Payments
   MODIFY payment_method ENUM('Credit Card','Cash','Online Transfer') NULL,
   MODIFY payment_date TIMESTAMP NULL DEFAULT NULL;
@@ -603,3 +613,5 @@ ALTER TABLE Payments
 ALTER TABLE Payments
   ADD UNIQUE KEY uniq_payments_ticket_id (ticket_id);
 
+ALTER TABLE `Cargo` ADD COLUMN `sender_id` int NOT NULL AFTER `cargo_id`;
+ALTER TABLE `Cargo` ADD CONSTRAINT `fk_cargo_sender` FOREIGN KEY (`sender_id`) REFERENCES `Users`(`user_id`) ON DELETE CASCADE;

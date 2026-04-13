@@ -6,6 +6,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 export interface AuthUser {
   user_id: number;
   email: string;
+  contact?: string;
   role: 'Admin' | 'Staff' | 'Customer';
   passenger_id?: number | null;
   staff_id?: number | null;

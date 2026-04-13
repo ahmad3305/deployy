@@ -17,7 +17,14 @@ async function handler(req: AuthenticatedRequest) {
 
     const userDetails = await queryOne(
       `SELECT 
-        u.user_id, u.email, u.role, u.passenger_id, u.staff_id, u.is_active, u.created_at,
+        u.user_id, 
+        u.email, 
+        u.contact,
+        u.role, 
+        u.passenger_id, 
+        u.staff_id, 
+        u.is_active, 
+        u.created_at,
         s.first_name as staff_first_name,
         s.last_name as staff_last_name,
         s.role as staff_role,

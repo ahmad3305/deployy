@@ -9,6 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@nivo/bar": "^0.99.0",
+    "@nivo/line": "^0.99.0",
+    "@nivo/pie": "^0.99.0",
     "next": "15.2.0",
     "react": "19.0.0",
     "react-dom": "19.0.0"

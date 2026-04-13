@@ -78,14 +78,31 @@ export const flightUpdateSchema = flightCreateSchema.partial();
 export const flightScheduleCreateSchema = z.object({
   flight_id: z.number().int().positive(),
   aircraft_id: z.number().int().positive(),
-  departure_datetime: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/), // YYYY-MM-DD HH:MM:SS
-  arrival_datetime: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
+  departure_datetime: z.string()
+    .transform(val => {
+      // Accept both datetime-local format (2024-04-13T14:30) and MySQL format (2024-04-13 14:30:00)
+      if (val.includes('T')) {
+        // Convert from datetime-local to MySQL format
+        return val.replace('T', ' ') + ':00';
+      }
+      return val;
+    })
+    .refine(val => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val), 'Invalid datetime format'),
+  arrival_datetime: z.string()
+    .transform(val => {
+      // Accept both datetime-local format (2024-04-13T14:30) and MySQL format (2024-04-13 14:30:00)
+      if (val.includes('T')) {
+        // Convert from datetime-local to MySQL format
+        return val.replace('T', ' ') + ':00';
+      }
+      return val;
+    })
+    .refine(val => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val), 'Invalid datetime format'),
   gate_id: z.number().int().positive(),
   flight_status: z.enum(['Scheduled', 'Boarding', 'Departed', 'Delayed', 'Cancelled', 'Completed', 'Consolidated']).default('Scheduled'),
 });
 
 export const flightScheduleUpdateSchema = flightScheduleCreateSchema.partial();
-
 // ========== Passenger Validations ==========
 export const passengerCreateSchema = z.object({
   first_name: z.string().min(1).max(50),
@@ -119,7 +136,6 @@ export const ticketUpdateSchema = z.object({
   status: z.enum(['Pending', 'Confirmed', 'Checked-In', 'Boarded', 'Cancelled', 'Moved']).optional(),
 });
 
-// ========== Cargo Validations ==========
 export const cargoCreateSchema = z.object({
   flight_id: z.number().int().positive(),
   tracking_number: z.string().min(1).max(10),
@@ -132,11 +148,13 @@ export const cargoCreateSchema = z.object({
   sender_contact: z.string().min(1).max(50),
   reciever_name: z.string().min(1).max(50),
   reciever_contact: z.string().min(1).max(50),
-  status: z.enum(['Booked', 'Loaded', 'In Transit', 'Unloaded', 'Customs Hold', 'Delivered', 'Cancelled']).default('Booked'),
   is_insured: z.boolean().default(false),
 });
 
-export const cargoUpdateSchema = cargoCreateSchema.partial();
+export const cargoUpdateSchema = cargoCreateSchema.partial().extend({
+  status: z.enum(['Booked', 'Loaded', 'In Transit', 'Unloaded', 'Customs Hold', 'Delivered', 'Cancelled']).optional(),
+});
+
 
 // ========== Payment Validations ==========
 export const paymentCheckoutSchema = z.object({
@@ -164,24 +182,29 @@ export const paymentUpdateSchema = z.object({
 
 
 // ========== Helper function to validate data ==========
+// ========== Helper function to validate data ==========
 export function validateData<T>(
   schema: z.ZodSchema<T>, 
   data: any
-): { success: boolean; data?: T; errors?: any } {
+): { success: boolean; data?: T; errors?: any[] } {
   try {
     const validated = schema.parse(data);
     return { success: true, data: validated };
   } catch (error) {
     if (error instanceof z.ZodError) {
+      const errors = error.issues.map(issue => ({
+        path: issue.path.length > 0 ? issue.path.join('.') : 'root',
+        message: issue.message,
+        code: issue.code,
+      }));
+      console.error('Validation errors:', errors);
       return { 
         success: false, 
-        errors: error.issues.map(issue => ({
-          path: issue.path.join('.'),
-          message: issue.message
-        }))
+        errors,
       };
     }
-    return { success: false, errors: [{ message: 'Validation failed' }] };
+    console.error('Unexpected validation error:', error);
+    return { success: false, errors: [{ path: 'unknown', message: 'Validation failed', code: 'unknown' }] };
   }
 }
 
@@ -401,3 +424,86 @@ export const privateAircraftCreateSchema = z.object({
 });
 
 export const privateAircraftUpdateSchema = privateAircraftCreateSchema.partial();
+
+
+export const priceValidationSchema = z.object({
+  source_airport_id: z.number().int().min(1, "Select a valid source airport"),
+  destination_airport_id: z.number().int().min(1, "Select a valid destination airport"),
+  economy_price: z.number().min(0, "Economy price cannot be negative"),
+  business_price: z.number().min(0, "Business price cannot be negative"),
+  first_class_price: z.number().min(0, "First class price cannot be negative"),
+});
+
+// For update: allow partial but forbid changing the airport pairing
+export const priceUpdateSchema = z.object({
+  economy_price: z.number().min(0, "Economy price cannot be negative").optional(),
+  business_price: z.number().min(0, "Business price cannot be negative").optional(),
+  first_class_price: z.number().min(0, "First class price cannot be negative").optional(),
+});
+
+
+// ========== User Validations ==========
+export const userRegisterSchema = z.object({
+  email: z
+    .string()
+    .email('Invalid email address')
+    .min(5, 'Email must be at least 5 characters')
+    .max(255, 'Email must not exceed 255 characters'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(255, 'Password must not exceed 255 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number')
+    .regex(/[!@#$%^&*]/, 'Password must contain at least one special character (!@#$%^&*)'),
+  contact: z
+    .string()
+    .min(10, 'Contact must be at least 10 characters')
+    .max(20, 'Contact must not exceed 20 characters')
+    .optional()
+    .or(z.literal('')),
+  role: z
+    .enum(['Admin', 'Staff', 'Customer'])
+    .default('Customer'),
+});
+
+export const userLoginSchema = z.object({
+  email: z
+    .string()
+    .email('Invalid email address'),
+  password: z
+    .string()
+    .min(1, 'Password is required'),
+});
+
+export const userUpdateSchema = z.object({
+  email: z
+    .string()
+    .email('Invalid email address')
+    .max(255, 'Email must not exceed 255 characters')
+    .optional(),
+  contact: z
+    .string()
+    .min(10, 'Contact must be at least 10 characters')
+    .max(20, 'Contact must not exceed 20 characters')
+    .optional()
+    .or(z.literal('')),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(255, 'Password must not exceed 255 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number')
+    .regex(/[!@#$%^&*]/, 'Password must contain at least one special character (!@#$%^&*)')
+    .optional(),
+});
+
+
+
+// Type exports for TypeScript
+export type UserRegisterInput = z.infer<typeof userRegisterSchema>;
+export type UserLoginInput = z.infer<typeof userLoginSchema>;
+export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
+
