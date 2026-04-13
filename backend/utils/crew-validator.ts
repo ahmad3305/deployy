@@ -35,8 +35,15 @@ const CREW_ROLES: CrewRole[] = [
   'Supervisor',
 ];
 
-function toDate(v: string) {
-  return new Date(v.replace(' ', 'T') + 'Z');
+function toDate(v: string | Date | number | null | undefined): Date {
+  if (!v) return new Date(NaN);
+  if (v instanceof Date) return v;
+  if (typeof v === 'number') return new Date(v);
+  if (typeof v === 'string') {
+    if (v.includes('T')) return new Date(v);
+    return new Date(v.replace(' ', 'T') + 'Z');
+  }
+  return new Date(NaN);
 }
 
 function extractDatePart(dt: Date) {
@@ -255,6 +262,12 @@ export async function createTasksForSchedule(flight_schedule_id: number) {
     await query(`DELETE FROM Tasks WHERE flight_schedule_id = ?`, [flight_schedule_id]);
   }
 
+  const dep = toDate(schedule.departure_datetime);
+  const arr = toDate(schedule.arrival_datetime);
+  if (isNaN(dep.getTime()) || isNaN(arr.getTime())) throw new Error('Invalid schedule datetime');
+  const depSql = formatSqlDateTimeUTC(dep);
+  const arrSql = formatSqlDateTimeUTC(arr);
+  
   for (const req of requirements) {
     const task_type = taskTypeForRole(req.role_required);
     for (let i = 0; i < req.number_required; i++) {
@@ -265,13 +278,14 @@ export async function createTasksForSchedule(flight_schedule_id: number) {
           flight_schedule_id,
           task_type,
           req.role_required,
-          schedule.departure_datetime,
-          schedule.arrival_datetime,
+          depSql,
+          arrSql,
         ]
       );
     }
   }
 }
+
 
 export async function autoAssignStaffForSchedule(flight_schedule_id: number) {
   const res = await validateAndPlanCrewForSchedule(flight_schedule_id);

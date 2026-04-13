@@ -562,9 +562,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   shell: {
     maxWidth: 720,
+    width: "100%",
     margin: "0 auto",
     padding: "45px 18px 55px 18px",
     minHeight: "100vh",
+    boxSizing: "border-box",
   },
   title: {
     fontSize: 29,
@@ -581,6 +583,9 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1.3px solid #2563eb26",
     marginBottom: 21,
     padding: "33px 25px 24px 25px",
+    width: "100%",
+    boxSizing: "border-box",
+    overflow: "hidden",
   },
   loading: {
     color: "#93c5fd",
@@ -618,7 +623,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   fieldsGrid: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
     gap: "20px 18px",
     marginBottom: 8,
   },
@@ -640,6 +645,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 15,
     padding: "9px 12px",
     outline: "none",
+    width: "100%",
+    boxSizing: "border-box",
   },
   select: {
     background: "#1e293b",
@@ -650,6 +657,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "9px 12px",
     outline: "none",
     cursor: "pointer",
+    width: "100%",
+    boxSizing: "border-box",
   },
   crewTable: {
     width: "100%",
@@ -682,6 +691,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "7px 10px",
     outline: "none",
     width: "100%",
+    boxSizing: "border-box",
   },
   xBtn: {
     background: "#f87171",
@@ -698,6 +708,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     gap: 14,
     marginTop: 28,
+    flexWrap: "wrap",
   },
   submitBtn: {
     background: "linear-gradient(90deg,#2563eb 77%, #0ea5e9)",

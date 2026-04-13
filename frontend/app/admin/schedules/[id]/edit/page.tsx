@@ -195,15 +195,16 @@ export default function ScheduleEditPage() {
       console.log("Formatted arrival:", mysqlArrival);
 
       await updateSchedule(
-        schedule.flight_schedule_id,
-        {
-          aircraft_id: Number(aircraft_id),
-          gate_id: Number(gate_id),
-          departure_datetime: mysqlDeparture,
-          arrival_datetime: mysqlArrival,
-        },
-        token
-      );
+      schedule.flight_schedule_id,
+      {
+        aircraft_id: Number(aircraft_id),
+        gate_id: Number(gate_id),
+        departure_datetime: mysqlDeparture,
+        arrival_datetime: mysqlArrival,
+        crew_requirements,
+      },
+      token
+    );
 
       console.log("Schedule updated successfully");
       router.push("/admin/schedules");
@@ -254,7 +255,7 @@ export default function ScheduleEditPage() {
                 </span>
               ) : (
                 <span style={{ color: "#60a5fa" }}>
-                  Editing details (no time change = just an update).
+                  Editing details.
                 </span>
               )}
             </div>

@@ -102,7 +102,16 @@ export const flightScheduleCreateSchema = z.object({
   flight_status: z.enum(['Scheduled', 'Boarding', 'Departed', 'Delayed', 'Cancelled', 'Completed', 'Consolidated']).default('Scheduled'),
 });
 
-export const flightScheduleUpdateSchema = flightScheduleCreateSchema.partial();
+
+export const flightScheduleUpdateSchema = flightScheduleCreateSchema.partial().extend({
+  crew_requirements: z.array(
+    z.object({
+      role_required: z.string(),
+      number_required: z.number().int().min(1),
+    })
+  ).optional(),
+  delay_reason: z.string().optional(),
+});
 // ========== Passenger Validations ==========
 export const passengerCreateSchema = z.object({
   first_name: z.string().min(1).max(50),
@@ -114,6 +123,8 @@ export const passengerCreateSchema = z.object({
   contact_number: z.string().min(1).max(50),
   email: z.string().email().max(50),
 });
+
+
 
 export const passengerUpdateSchema = passengerCreateSchema.partial();
 

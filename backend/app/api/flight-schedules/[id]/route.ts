@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, notFoundResponse, noContentResponse, validationErrorResponse } from '@/lib/response';
 import { flightScheduleUpdateSchema, validateData } from '@/lib/validations';
+import { validateAndPlanCrewForSchedule, createTasksForSchedule, autoAssignStaffForSchedule } from '@/utils/crew-validator'; // <-- Update import path if needed
 
 import { handleOptions } from '@/lib/cors';
 
@@ -67,7 +68,17 @@ export async function GET(
       return notFoundResponse('Flight schedule not found');
     }
 
+    const crewReqs = await query(
+      `SELECT role_required, number_required
+      FROM Crew_requirements
+      WHERE flight_schedule_id = ?`,
+      [scheduleId]
+    );
+
+    (schedule as any).crew_requirements = crewReqs || [];
+
     return successResponse(schedule, 'Flight schedule retrieved successfully');
+
   } catch (error: any) {
     console.error('Get flight schedule error:', error);
     return errorResponse('Failed to retrieve flight schedule: ' + error.message, 500);
@@ -80,107 +91,109 @@ export async function PUT(
 ) {
   try {
     const scheduleId = parseInt(params.id);
-
-    if (isNaN(scheduleId)) {
-      return errorResponse('Invalid flight schedule ID', 400);
-    }
+    if (isNaN(scheduleId)) return errorResponse('Invalid flight schedule ID', 400);
 
     const existing = await queryOne<any>(
       'SELECT * FROM Flight_schedules WHERE flight_schedule_id = ?',
       [scheduleId]
     );
-
-    if (!existing) {
-      return notFoundResponse('Flight schedule not found');
-    }
+    if (!existing) return notFoundResponse('Flight schedule not found');
 
     const body = await request.json();
-
     const validation = validateData(flightScheduleUpdateSchema, body);
-    if (!validation.success) {
-      return validationErrorResponse(validation.errors);
-    }
-
+    if (!validation.success) return validationErrorResponse(validation.errors);
     const updateData = validation.data!;
 
     if (existing.flight_status === 'Completed') {
       return errorResponse('Cannot update completed flight schedule', 400);
     }
 
+    // 1. Validate new aircraft/gate if provided
     if (updateData.aircraft_id) {
       const aircraft = await queryOne<any>(
-        'SELECT * FROM Aircraft WHERE aircraft_id = ?',
-        [updateData.aircraft_id]
+        'SELECT * FROM Aircraft WHERE aircraft_id = ?', [updateData.aircraft_id]
       );
-
-      if (!aircraft) {
-        return errorResponse('Aircraft not found', 404);
-      }
-
-      if (aircraft.status !== 'Active') {
-        return errorResponse('Aircraft is not active', 400);
-      }
+      if (!aircraft) return errorResponse('Aircraft not found', 404);
+      if (aircraft.status !== 'Active') return errorResponse('Aircraft is not active', 400);
     }
-
     if (updateData.gate_id) {
-      const gate = await queryOne(
-        'SELECT * FROM Gates WHERE gate_id = ?',
-        [updateData.gate_id]
-      );
-
-      if (!gate) {
-        return errorResponse('Gate not found', 404);
-      }
+      const gate = await queryOne('SELECT * FROM Gates WHERE gate_id = ?', [updateData.gate_id]);
+      if (!gate) return errorResponse('Gate not found', 404);
     }
 
+    // 2. Temporal logic
     const newDeparture = updateData.departure_datetime || existing.departure_datetime;
     const newArrival = updateData.arrival_datetime || existing.arrival_datetime;
-    const newAircraftId = updateData.aircraft_id || existing.aircraft_id;
-    const newGateId = updateData.gate_id || existing.gate_id;
-
-    const departureTime = new Date(newDeparture);
-    const arrivalTime = new Date(newArrival);
-
-    if (arrivalTime <= departureTime) {
+    if (new Date(newArrival) <= new Date(newDeparture)) {
       return errorResponse('Arrival time must be after departure time', 400);
     }
 
-
-    const updates: string[] = [];
-    const values: any[] = [];
-
-    if (updateData.aircraft_id !== undefined) {
-      updates.push('aircraft_id = ?');
-      values.push(updateData.aircraft_id);
-    }
-    if (updateData.departure_datetime !== undefined) {
-      updates.push('departure_datetime = ?');
-      values.push(updateData.departure_datetime);
-    }
-    if (updateData.arrival_datetime !== undefined) {
-      updates.push('arrival_datetime = ?');
-      values.push(updateData.arrival_datetime);
-    }
-    if (updateData.gate_id !== undefined) {
-      updates.push('gate_id = ?');
-      values.push(updateData.gate_id);
-    }
-    if (updateData.flight_status !== undefined) {
-      updates.push('flight_status = ?');
-      values.push(updateData.flight_status);
+    // 3. Update schedule fields in DB
+    const updates: string[] = [], values: any[] = [];
+    if (updateData.aircraft_id !== undefined) { updates.push('aircraft_id = ?'); values.push(updateData.aircraft_id); }
+    if (updateData.departure_datetime !== undefined) { updates.push('departure_datetime = ?'); values.push(updateData.departure_datetime); }
+    if (updateData.arrival_datetime !== undefined) { updates.push('arrival_datetime = ?'); values.push(updateData.arrival_datetime); }
+    if (updateData.gate_id !== undefined) { updates.push('gate_id = ?'); values.push(updateData.gate_id); }
+    if (updateData.flight_status !== undefined) { updates.push('flight_status = ?'); values.push(updateData.flight_status); }
+    if (updateData.delay_reason !== undefined) { updates.push('delay_reason = ?'); values.push(updateData.delay_reason); }
+    if (updates.length > 0) {
+      values.push(scheduleId);
+      await query(`UPDATE Flight_schedules SET ${updates.join(', ')} WHERE flight_schedule_id = ?`, values);
     }
 
-    if (updates.length === 0) {
-      return errorResponse('No fields to update', 400);
+    // 4. Replace all crew requirements for this schedule
+    if (Array.isArray(updateData.crew_requirements)) {
+      await query('DELETE FROM Crew_requirements WHERE flight_schedule_id = ?', [scheduleId]);
+      for (const cr of updateData.crew_requirements) {
+        if (cr && cr.role_required && cr.number_required > 0) {
+          await query('INSERT INTO Crew_requirements (flight_schedule_id, role_required, number_required) VALUES (?, ?, ?)',
+            [scheduleId, cr.role_required, cr.number_required]);
+        }
+      }
     }
 
-    values.push(scheduleId);
+    // 5. Re-validate crew availability and update status
+    const crewResult = await validateAndPlanCrewForSchedule(scheduleId);
 
+    if (crewResult.kind === 'ok') {
+    // Enough crew, always mark as scheduled and clear delay_reason (removes any manual/system delay)
     await query(
-      `UPDATE Flight_schedules SET ${updates.join(', ')} WHERE flight_schedule_id = ?`,
-      values
+      `UPDATE Flight_schedules SET flight_status = 'Scheduled', delay_reason = NULL WHERE flight_schedule_id = ?`,
+      [scheduleId]
     );
+    await createTasksForSchedule(scheduleId);
+    await autoAssignStaffForSchedule(scheduleId);
 
+  } else if (crewResult.kind === 'insufficient_crew') {
+    // Check if this PUT is a manual/admin delay with a reason set (not just revalidating)
+    const isManualDelay =
+      updateData.flight_status === 'Delayed' &&
+      !!updateData.delay_reason &&
+      updateData.delay_reason !== 'Crew-Issue';
+
+    if (!isManualDelay) {
+      // System sets the delay reason only if not manual
+      await query(
+        `UPDATE Flight_schedules SET flight_status = 'Delayed', delay_reason = ? WHERE flight_schedule_id = ?`,
+        ['Crew-Issue', scheduleId]
+      );
+    }
+
+  } else {
+    const isManualDelay =
+      updateData.flight_status === 'Delayed' &&
+      !!updateData.delay_reason &&
+      updateData.delay_reason !== 'Crew-Issue';
+
+    if (!isManualDelay) {
+      await query(
+        `UPDATE Flight_schedules SET flight_status = 'Delayed', delay_reason = ? WHERE flight_schedule_id = ?`,
+        ['Crew assignment pending', scheduleId]
+      );
+    }
+  }
+
+    // 6. Return updated state to client
     const updatedSchedule = await queryOne(
       `SELECT 
         fs.*,

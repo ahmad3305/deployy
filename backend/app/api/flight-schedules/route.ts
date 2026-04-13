@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { successResponse, errorResponse, createdResponse, validationErrorResponse } from '@/lib/response';
 import { flightScheduleCreateSchema, validateData } from '@/lib/validations';
-import { validateAndPlanCrewForSchedule, createTasksForSchedule, autoAssignStaffForSchedule } from '@/lib/crew-validator'; // <-- Update import path if needed
+import { validateAndPlanCrewForSchedule, createTasksForSchedule, autoAssignStaffForSchedule } from '@/utils/crew-validator'; // <-- Update import path if needed
 import { handleOptions } from '@/lib/cors';
 
 export function OPTIONS() {
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
       await autoAssignStaffForSchedule(result.insertId);
     } else {
       const delayReason = crewResult.kind === 'insufficient_crew'
-        ? 'Insufficient Crew'
+        ? 'Crea-Issue'
         : 'Crew assignment pending';
       await query(
         `UPDATE Flight_schedules SET flight_status = 'Delayed', delay_reason = ? WHERE flight_schedule_id = ?`,
@@ -162,11 +162,10 @@ export async function POST(request: NextRequest) {
     }
 
     return createdResponse(
-      newSchedule,
+      { ...newSchedule, crewResult }, 
       crewResult.kind === 'ok'
         ? 'Flight schedule created and crew assigned'
-        : `Flight schedule delayed: ${newSchedule.delay_reason}`,
-      { crewResult }
+        : `Flight schedule delayed: ${newSchedule.delay_reason}`
     );
   } catch (error: any) {
     console.error('Create flight schedule error:', error);
