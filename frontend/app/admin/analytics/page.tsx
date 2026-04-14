@@ -272,7 +272,7 @@ export default function AnalyticsAdminPage() {
                   axisBottom={{
                     tickSize: 6,
                     tickPadding: 5,
-                    rotate: -36,
+                    tickRotation: -36,
                     legend: "Date",
                     legendOffset: 38,
                     legendPosition: "middle",
@@ -285,7 +285,6 @@ export default function AnalyticsAdminPage() {
                     legendPosition: "middle",
                   }}
                   lineWidth={3}
-                  colors={{ datum: "color" }}
                   pointSize={10}
                   pointColor={"#2563eb"}
                   pointBorderWidth={2}
