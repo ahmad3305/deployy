@@ -264,7 +264,8 @@ export default function AnalyticsAdminPage() {
               <h2 style={styles.sectionTitle}>📈 Flights Per Day (Last 30 Days)</h2>
               <div style={{ height: 260 }}>
                 <ResponsiveLine
-                  data={[{ id: "Flights", color: "#0ea5e9", data: flightsPerDay }]}
+                  data={[{ id: "Flights", data: flightsPerDay }]}
+                  colors={["#0ea5e9"]}
                   margin={{ top: 24, right: 30, bottom: 40, left: 45 }}
                   xScale={{ type: "point" }}
                   yScale={{ type: "linear", min: 0, max: "auto", stacked: false, reverse: false }}
